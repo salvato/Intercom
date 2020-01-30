@@ -1,3 +1,5 @@
+WORK IN PROGRESS
+
 Nella fase di "Riposo" la stazione "Base" è configurata come PTX e le stazioni
 "Remote" sono configurate come PRX, ciascuna con il proprio indirizzo.
 
