@@ -203,6 +203,8 @@ __IO uint16_t currOutBuf = 0;
 uint16_t offset;
 
 __IO bool sleeping = true;
+__IO bool bConnected;
+
 uint8_t wakeUpCommand = 0x10;
 
 
@@ -229,25 +231,26 @@ main(void) {
     isBaseStation = HAL_GPIO_ReadPin(CONFIGURE_PORT, CONFIGURE_PIN);
     InitRadio(isBaseStation, Channel); // Base is PTX, Remotes are PRXs
 
-    // Let's wait for external events
-    if(isBaseStation)
-        BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_EXTI);
-
     rf24.clearInterrupts();
     rf24.maskIRQ(false, false, false);
 
-    // if we are Base we will woken up only by button press
-    // if we are Remote we will woken up by receiving a command
-    while(sleeping) { // Wait an external event
-    }
-
-    // An external event has been detected !
-    initBuffers(isBaseStation);
-
     if(isBaseStation) {
-        rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-        rf24.startWrite();
+        BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_EXTI);
+        // if we are Base we will woken up only by button press
+        // if we are Remote we will woken up by receiving a command
+        while(sleeping) { // Wait an external event
+        }
+        // An external event has been detected !
+        initBuffers(isBaseStation);
+        bConnected = false;
+        if(isBaseStation) {
+            while(!bConnected) {
+                rf24.write(txBuffer, MAX_PAYLOAD_SIZE);
+                HAL_Delay(100);
+            }
+        }
     }
+
     status = BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
     if(status != AUDIO_OK) {
         Error_Handler();
@@ -488,12 +491,15 @@ EXTI15_10_IRQHandler(void) { // We received a radio interrupt...
     // Read & reset the IRQ status
     rf24.whatHappened(&tx_ok, &tx_failed, &rx_data_ready);
     if(rx_data_ready) {
-        if(isBaseStation) {
+        if(isBaseStation && bConnected) {
             rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
         }
         BSP_LED_On(LED_BLUE); // Signal the packet's start reading
         rf24.read(inBuff, MAX_PAYLOAD_SIZE);
         BSP_LED_Off(LED_BLUE); // Reading done
+        if(isBaseStation && ! bConnected) {
+            bConnected = true;
+        }
         if(!sleeping) {
             // Write data in the current chunk
             offset = chunk*MAX_PAYLOAD_SIZE;
