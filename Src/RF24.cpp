@@ -5,8 +5,6 @@
 
 
 
-/****************************************************************************/
-
 RF24::RF24(GPIO_TypeDef *_ceport, uint32_t _cepin,
            GPIO_TypeDef *_csport, uint32_t _cspin,
            GPIO_TypeDef *_irqport, uint32_t _irqpin, IRQn_Type _irqntype)
@@ -18,14 +16,13 @@ RF24::RF24(GPIO_TypeDef *_ceport, uint32_t _cepin,
     , csn_pin(_cspin)
     , irq_pin(_irqpin)
     , irqn_type(_irqntype)
-    , p_variant(false)
     , payload_size(MAX_PAYLOAD_SIZE)
     , dynamic_payloads_enabled(false)
     , addr_width(5)
     , csDelay(130)
     //,pipe0_reading_address(0)
 {
-    pipe0_reading_address[0]=0;
+    pipe0_reading_address[0] = 0;
 }
 
 
@@ -156,10 +153,6 @@ RF24::begin(uint8_t channelNumber, uint32_t preempPriority) {
     // Reset value is MAX
     setPALevel(RF24_PA_MAX);
 
-    // check for connected module and if this is a p nRF24l01 variant
-    if(setDataRate(RF24_250KBPS))
-        p_variant = true;
-
     // Get the RF setup to be sure the module is attached and responding
     setup = read_register(RF_SETUP);
     // if setup is 0 or 0xff then there was no response from module
@@ -170,7 +163,7 @@ RF24::begin(uint8_t channelNumber, uint32_t preempPriority) {
     setDataRate(RF24_2MBPS);
 
     // Reset current status : Notice reset and flush is the last thing we do
-    // Disable Interrupt requests...
+    // Clear Interrupt Request...
     write_register(NRF_STATUS, _BV(RX_DR) | _BV(TX_DS) | _BV(MAX_RT) );
 
     setChannel(channelNumber);
@@ -183,12 +176,23 @@ RF24::begin(uint8_t channelNumber, uint32_t preempPriority) {
     powerUp();
 
     // Enable hardware interrupts
-    HAL_NVIC_EnableIRQ(irqn_type);
+    enableIRQ();
 
     return true;
 }
 
-/****************************************************************************/
+
+void
+RF24::enableIRQ() {
+    HAL_NVIC_EnableIRQ(irqn_type);
+}
+
+
+void
+RF24::disableIRQ() {
+    HAL_NVIC_EnableIRQ(irqn_type);
+}
+
 
 void
 RF24::csn(GPIO_PinState mode) {
@@ -553,12 +557,6 @@ static const char * const rf24_datarate_e_str_P[] PROGMEM = {
     rf24_datarate_e_str_1,
     rf24_datarate_e_str_2,
 };
-static const char rf24_model_e_str_0[] PROGMEM = "nRF24L01";
-static const char rf24_model_e_str_1[] PROGMEM = "nRF24L01+";
-static const char * const rf24_model_e_str_P[] PROGMEM = {
-    rf24_model_e_str_0,
-    rf24_model_e_str_1,
-};
 static const char rf24_crclength_e_str_0[] PROGMEM = "Disabled";
 static const char rf24_crclength_e_str_1[] PROGMEM = "8 bits";
 static const char rf24_crclength_e_str_2[] PROGMEM = "16 bits" ;
@@ -598,7 +596,6 @@ RF24::printDetails(void) {
     print_byte_register(PSTR("DYNPD/FEATURE"), DYNPD, 2);
 
     sprintf(buffer, PSTR("Data Rate\t = " PRIPSTR "\r\n"), pgm_read_ptr(&rf24_datarate_e_str_P[getDataRate()]));
-    sprintf(buffer, PSTR("Model\t\t = " PRIPSTR "\r\n"), pgm_read_ptr(&rf24_model_e_str_P[isPVariant()]));
     sprintf(buffer, PSTR("CRC Length\t = " PRIPSTR "\r\n"), pgm_read_ptr(&rf24_crclength_e_str_P[getCRCLength()]));
     sprintf(buffer, PSTR("PA Power\t = " PRIPSTR "\r\n"),  pgm_read_ptr(&rf24_pa_dbm_e_str_P[getPALevel()]));
 }
@@ -1106,13 +1103,6 @@ RF24::writeAckPayload(uint8_t pipe, const void* buf, uint8_t len) {
 bool
 RF24::isAckPayloadAvailable(void) {
     return ! (read_register(FIFO_STATUS) & _BV(RX_EMPTY));
-}
-
-/****************************************************************************/
-
-bool
-RF24::isPVariant(void) {
-    return p_variant ;
 }
 
 /****************************************************************************/
