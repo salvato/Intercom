@@ -110,7 +110,7 @@ RF24::begin(uint8_t channelNumber, uint32_t preempPriority) {
     setup &= ~_BV(PWR_UP);      // POWER DOWN
     write_register(NRF_CONFIG, setup);
     if(read_register(NRF_CONFIG) != setup)
-        Error_Handler();
+        return false;
 
     // In order to enable DPL the EN_DPL bit in the FEATURE register must be set.
     // In RX mode the DYNPD register has to be set.
@@ -123,7 +123,7 @@ RF24::begin(uint8_t channelNumber, uint32_t preempPriority) {
             _BV(EN_DYN_ACK);  // Enables the W_TX_PAYLOAD_NOACK command
     write_register(FEATURE, setup);
     if(read_register(FEATURE) != setup)
-        Error_Handler();
+        return false;
 
     // Enable Enhanced ShockBurst Auto Acknowledgment on all pipes.
     setup = _BV(ENAA_P0) |
@@ -134,7 +134,7 @@ RF24::begin(uint8_t channelNumber, uint32_t preempPriority) {
             _BV(ENAA_P5);
     write_register(EN_AA,  setup);
     if(read_register(EN_AA) != setup)
-        Error_Handler();
+        return false;
 
     // Enable Dynamic Payload Length on all pipes
     setup = _BV(DPL_P0) |
@@ -145,7 +145,7 @@ RF24::begin(uint8_t channelNumber, uint32_t preempPriority) {
             _BV(DPL_P5);
     write_register(DYNPD, setup);
     if(read_register(DYNPD) != setup)
-        Error_Handler();
+        return false;
     dynamic_payloads_enabled = true;
 
     setRetries(1, 0); // 500 us and Single Retry
@@ -164,7 +164,7 @@ RF24::begin(uint8_t channelNumber, uint32_t preempPriority) {
 
     // Reset current status : Notice reset and flush is the last thing we do
     // Clear Interrupt Request...
-    write_register(NRF_STATUS, _BV(RX_DR) | _BV(TX_DS) | _BV(MAX_RT) );
+    clearInterrupts();
 
     setChannel(channelNumber);
 
@@ -179,6 +179,12 @@ RF24::begin(uint8_t channelNumber, uint32_t preempPriority) {
     enableIRQ();
 
     return true;
+}
+
+
+void
+RF24::clearInterrupts() {
+    write_register(NRF_STATUS, _BV(RX_DR) | _BV(TX_DS) | _BV(MAX_RT) );
 }
 
 
@@ -942,8 +948,7 @@ RF24::whatHappened(__IO bool* tx_ok, __IO bool* tx_fail, __IO bool* rx_ready) {
 
 void
 RF24::openWritingPipe(const uint8_t *address) {
-    // Note that AVR 8-bit uC's store this LSB first, and the NRF24L01(+)
-    // expects it LSB first too, so we're good.
+    // Note that NRF24L01(+) expects address LSB first
     write_register(RX_ADDR_P0, address, addr_width);
     write_register(TX_ADDR, address, addr_width);
     write_register(RX_PW_P0, payload_size);

@@ -92,6 +92,8 @@
 #define NRF24_IRQ_PORT    GPIOA
 #define NRF24_IRQ_PIN     GPIO_PIN_10
 #define NRF24_IRQ_CHAN    EXTI15_10_IRQn
+#define PTX               true
+#define PRX               !PTX
 
 //===============================================================
 //                 ADC
@@ -143,6 +145,8 @@ static void initLeds();
 static void InitADC();
 static void Init_TIM2_Adc(void);
 static void InitRadio(uint8_t isBaseStation, uint8_t channelNumber);
+static void initBuffers(bool isBaseStation);
+static void setRole(bool bPTX);
 
 char buf[255];
 
@@ -155,12 +159,12 @@ uint8_t  Volume;
 uint8_t  status;
 
 
-__IO bool tx_ok;
-__IO bool tx_failed;
-__IO bool rx_data_ready;
-__IO bool bRadioIrq;
+__IO bool    tx_ok;
+__IO bool    tx_failed;
+__IO bool    rx_data_ready;
+__IO bool    bRadioIrq;
 __IO uint8_t ready2Send;
-__IO bool bReady2Play;
+__IO bool    bReady2Play;
 
 
 // nRF Addresses
@@ -170,13 +174,13 @@ __IO bool bReady2Play;
 //       Addresses as a continuation of the preamble (hi-low toggling)
 //       raises the Packet-Error-Rate.
 const uint8_t
-pipes[6][5] = {
-    {0x71, 0xCD, 0xAB, 0xCD, 0x70},
-    {0x71, 0xCD, 0xAB, 0xCD, 0x71},
-    {0x71, 0xCD, 0xAB, 0xCD, 0x72},
-    {0x71, 0xCD, 0xAB, 0xCD, 0x73},
-    {0x71, 0xCD, 0xAB, 0xCD, 0x74},
-    {0x71, 0xCD, 0xAB, 0xCD, 0x75}
+pipes[6][5] = { // Note that NRF24L01(+) expects address LSB first
+    {0x70, 0xCD, 0xAB, 0xCD, 0xAB},
+    {0x71, 0xCD, 0xAB, 0xCD, 0xAB},
+    {0x72, 0xCD, 0xAB, 0xCD, 0xAB},
+    {0x73, 0xCD, 0xAB, 0xCD, 0xAB},
+    {0x74, 0xCD, 0xAB, 0xCD, 0xAB},
+    {0x75, 0xCD, 0xAB, 0xCD, 0xAB}
 };
 
 
@@ -186,82 +190,95 @@ rf24(NRF24_CE_PORT,  NRF24_CE_PIN,
      NRF24_IRQ_PORT, NRF24_IRQ_PIN, NRF24_IRQ_CHAN);
 
 
-uint16_t* adcDataIn;
-uint16_t* Audio_Out_Buffer;
-uint8_t*  txBuffer;
-uint16_t* pdmDataIn;
-uint16_t* pcmDataOut;
-uint8_t*  inBuff;
+uint16_t* adcDataIn        = NULL;
+uint16_t* Audio_Out_Buffer = NULL;
+uint8_t*  txBuffer         = NULL;
+uint16_t* pdmDataIn        = NULL;
+uint16_t* pcmDataOut       = NULL;
+uint8_t*  inBuff           = NULL;
 
 uint16_t bufNum          = 2*16;
 __IO uint16_t currInBuf  = 0;
 __IO uint16_t currOutBuf = 0;
 uint16_t offset;
 
-__IO bool wakeUp = false;
+__IO bool wakedUp = false;
 uint8_t wakeUpCommand = 0x10;
 
 
 int
 main(void) {
     const uint8_t Channel = 76;
+    Volume = 70;   // % of Max
     ready2Send = 0;
+
+    // System startup
     HAL_Init();
     initLeds();
     SystemClock_Config();
+
+    // Allocate common buffers... (The receive buffer and the Audio Out one)
+    if(!inBuff)
+        inBuff = (uint8_t*)malloc(MAX_PAYLOAD_SIZE*sizeof(*inBuff));
+    if(!Audio_Out_Buffer)
+        Audio_Out_Buffer = (uint16_t*)malloc(2*2*MAX_PAYLOAD_SIZE*sizeof(*Audio_Out_Buffer));
+    memset(Audio_Out_Buffer, 0, 2*2*MAX_PAYLOAD_SIZE*sizeof(uint16_t));
+
+    // Are we Base station or Remote ?
     InitConfigPin();
+    isBaseStation = HAL_GPIO_ReadPin(CONFIGURE_PORT, CONFIGURE_PIN);
+    InitRadio(isBaseStation, Channel); // Base is PTX, Remotes are PRXs
+
+    // Let's wait for external events
     BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_EXTI);
 
-    isBaseStation = HAL_GPIO_ReadPin(CONFIGURE_PORT, CONFIGURE_PIN);
+    rf24.clearInterrupts();
+    rf24.maskIRQ(false, false, false);
 
-    // Base is PTX, Remotes are PRXs
-    InitRadio(isBaseStation, Channel);
+    // An external event has been detected !
+    while(!wakedUp) {}
+    if(isBaseStation)
+        rf24.write(&wakeUpCommand, 1);
 
-    while(!wakeUp) {}
-
-    Volume = 70;   // % of Max
-    status = BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO,
-                                Volume,
-                                DEFAULT_AUDIO_IN_FREQ);
+    status = BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
     if(status != AUDIO_OK) {
         Error_Handler();
     }
 
-    // Allocate common buffers...
-    inBuff           = (uint8_t*)malloc(MAX_PAYLOAD_SIZE*sizeof(*inBuff));
-    Audio_Out_Buffer = (uint16_t*)malloc(2*2*MAX_PAYLOAD_SIZE*sizeof(*Audio_Out_Buffer));
-    memset(Audio_Out_Buffer, 0, 2*2*MAX_PAYLOAD_SIZE*sizeof(uint16_t));
+    initBuffers(isBaseStation);
 
-//===============
-// Base Station
-//===============
-    if(isBaseStation) {
-        adcDataIn = (uint16_t*)malloc(2*MAX_PAYLOAD_SIZE*sizeof(*adcDataIn));
-        txBuffer  = (uint8_t *)malloc(MAX_PAYLOAD_SIZE*sizeof(*txBuffer));
+//=====================================
+    if(isBaseStation) { // Base Station
+//=====================================
+        setRole(PRX); // Change role from PTX to PRX...
         InitADC();
         Init_TIM2_Adc();
         // Enables ADC DMA requests and enables ADC peripheral
         if(HAL_ADC_Start_DMA(&hAdc, (uint32_t*)adcDataIn, 2*MAX_PAYLOAD_SIZE) != HAL_OK) {
             Error_Handler();
         }
-        //=============================
-        // Wait until Button is pressed
-        //=============================
-        BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_GPIO);
-        while(BSP_PB_GetState(BUTTON_KEY) != 1) {
-            BSP_LED_Toggle(LED_GREEN);
-            HAL_Delay(40);
-        }
-        BSP_LED_Off(LED_GREEN);
 
         chunk = 0;
-        // Size: Number of audio data BYTES
         BSP_AUDIO_OUT_Play(Audio_Out_Buffer, 2*MAX_PAYLOAD_SIZE);
         rf24.maskIRQ(false, false, false);
         // Enable ADC periodic sampling
         if(HAL_TIM_Base_Start(&Tim2Handle) != HAL_OK) {
             Error_Handler();
         }
+        BSP_LED_On(LED_GREEN);
+        while(1) {
+        } // while(1)
+    }
+//==========================
+    else { // Remote Station
+//==========================
+        setRole(PTX); // Change role from PRX to PTX...
+        BSP_AUDIO_IN_Init(DEFAULT_AUDIO_IN_FREQ, DEFAULT_AUDIO_IN_BIT_RESOLUTION, DEFAULT_AUDIO_IN_CHANNEL_NBR);
+        BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE);
+        chunk = 0;
+        BSP_AUDIO_OUT_Play(Audio_Out_Buffer, 2*sizeof(*Audio_Out_Buffer)*MAX_PAYLOAD_SIZE);
+        rf24.maskIRQ(false, false, false);
+
         bRadioIrq = true; // To force the first sending when we are ready to send
         while(1) {
             if(ready2Send && bRadioIrq) { // We will send data only when avaialble and
@@ -274,174 +291,29 @@ main(void) {
             }
         } // while(1)
     }
-//===============
-// Remote Station
-//===============
+}
+
+
+void
+initBuffers(bool isBaseStation) {
+    if(isBaseStation) {
+        if(!adcDataIn)
+            adcDataIn = (uint16_t*)malloc(2*MAX_PAYLOAD_SIZE*sizeof(*adcDataIn));
+        if(!txBuffer)
+            txBuffer  = (uint8_t *)malloc(MAX_PAYLOAD_SIZE*sizeof(*txBuffer));
+        memset(adcDataIn,  0, bufNum*MAX_PAYLOAD_SIZE*sizeof(*adcDataIn));
+        memset(txBuffer,   0, bufNum*MAX_PAYLOAD_SIZE*sizeof(*txBuffer));
+    }
     else {
-        txBuffer   = (uint8_t *)malloc(bufNum*MAX_PAYLOAD_SIZE*sizeof(*txBuffer));
-        pdmDataIn  = (uint16_t*)malloc(INTERNAL_BUFF_SIZE*sizeof(*pdmDataIn));
-        pcmDataOut = (uint16_t*)malloc(PCM_OUT_SIZE*sizeof(*pcmDataOut));
+        if(!txBuffer)
+            txBuffer = (uint8_t *)malloc(bufNum*MAX_PAYLOAD_SIZE*sizeof(*txBuffer));
+        if(!pdmDataIn)
+            pdmDataIn = (uint16_t*)malloc(INTERNAL_BUFF_SIZE*sizeof(*pdmDataIn));
+        if(!pcmDataOut)
+            pcmDataOut = (uint16_t*)malloc(PCM_OUT_SIZE*sizeof(*pcmDataOut));
         memset(txBuffer,   0, bufNum*MAX_PAYLOAD_SIZE*sizeof(*txBuffer));
         memset(pdmDataIn,  0, INTERNAL_BUFF_SIZE*sizeof(*pdmDataIn));
         memset(pcmDataOut, 0, PCM_OUT_SIZE*sizeof(*pcmDataOut));
-
-        // Configure the I2S at 1024 KHz as an input clock for MEMS microphone
-        BSP_AUDIO_IN_Init(DEFAULT_AUDIO_IN_FREQ,
-                          DEFAULT_AUDIO_IN_BIT_RESOLUTION,
-                          DEFAULT_AUDIO_IN_CHANNEL_NBR);
-        ready2Send = false;
-        chunk = 0;
-        BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE);
-        BSP_AUDIO_OUT_Play(Audio_Out_Buffer, 2*sizeof(*Audio_Out_Buffer)*MAX_PAYLOAD_SIZE);// Size: Number of audio data BYTES.
-        rf24.maskIRQ(false, false, false);
-        rf24.startListening();
-        /*
-         Copyright (C) 2011 J. Coliz <maniacbug@ymail.com>
-
-         This program is free software; you can redistribute it and/or
-         modify it under the terms of the GNU General Public License
-         version 2 as published by the Free Software Foundation.
-         */
-
-        /**
-         * @file RF24.h
-         *
-         * Class declaration for RF24 and helper enums
-         */
-
-        #ifndef __RF24_H__
-        #define __RF24_H__
-
-        #include "RF24_config.h"
-
-        #define MAX_PAYLOAD_SIZE 32
-
-        typedef enum { RF24_PA_MIN = 0,RF24_PA_LOW, RF24_PA_HIGH, RF24_PA_MAX, RF24_PA_ERROR } rf24_pa_dbm_e ;
-        typedef enum { RF24_1MBPS = 0, RF24_2MBPS, RF24_250KBPS } rf24_datarate_e;
-        typedef enum { RF24_CRC_DISABLED = 0, RF24_CRC_8, RF24_CRC_16 } rf24_crclength_e;
-
-        /**
-         * Driver for nRF24L01(+) 2.4GHz Wireless Transceiver
-         */
-
-        class RF24
-        {
-        private:
-            SPI spi;
-
-            __IO bool bBusy;
-            GPIO_TypeDef* ce_port;
-            GPIO_TypeDef* csn_port;
-            GPIO_TypeDef* irq_port;
-            uint32_t ce_pin;
-            uint16_t csn_pin;
-            uint16_t irq_pin;
-
-            IRQn_Type irqn_type;
-
-            uint16_t spi_speed; /**< SPI Bus Speed */
-            bool p_variant; /* False for RF24L01 and true for RF24L01P */
-            uint8_t payload_size; /**< Fixed size of payloads */
-            bool dynamic_payloads_enabled; /**< Whether dynamic payloads are enabled. */
-            uint8_t pipe0_reading_address[5]; /**< Last address set on pipe 0 for reading. */
-            uint8_t addr_width; /**< The address width to use - 3,4 or 5 bytes. */
-
-        protected:
-            void beginTransaction();
-            void endTransaction();
-            void enableGPIOClock(GPIO_TypeDef* port);
-            void InitPins(uint32_t preempPriority);
-
-        public:
-            RF24(GPIO_TypeDef* _ceport, uint32_t _cepin,
-                 GPIO_TypeDef* _csport, uint32_t _cspin,
-                 GPIO_TypeDef *_irwqport, uint32_t _irqpin, IRQn_Type _irqntype);
-            bool begin(uint8_t channelNumber, uint32_t preempPriority);
-            void enableIRQ();
-            void disableIRQ();
-            bool isChipConnected();
-            void startListening(void);
-            void stopListening(void);
-            bool available(void);
-            void read( void* buf, uint8_t len );
-            bool write( const void* buf, uint8_t len );
-            void openWritingPipe(const uint8_t *address);
-            void openReadingPipe(uint8_t number, const uint8_t *address);
-            void printDetails(void);
-            bool available(uint8_t* pipe_num);
-            bool rxFifoFull();
-            void powerDown(void);
-            void powerUp(void) ;
-            bool write( const void* buf, uint8_t len, const bool multicast );
-            bool writeFast( const void* buf, uint8_t len );
-            bool writeFast( const void* buf, uint8_t len, const bool multicast );
-            bool writeBlocking( const void* buf, uint8_t len, uint32_t timeout );
-            bool txStandBy();
-            bool txStandBy(uint32_t timeout, bool startTx = 0);
-            void writeAckPayload(uint8_t pipe, const void* buf, uint8_t len);
-            bool isAckPayloadAvailable(void);
-            void whatHappened(volatile bool *tx_ok, volatile bool *tx_fail, volatile bool *rx_ready);
-            void startFastWrite( const void* buf, uint8_t len, const bool multicast, bool startTx = 1 );
-            void startWrite();
-            void reUseTX();
-            uint8_t flush_tx(void);
-            bool testCarrier(void);
-            bool testRPD(void) ;
-            bool isValid() { return ce_pin != 0xff && csn_pin != 0xff; }
-            void closeReadingPipe( uint8_t pipe ) ;
-            bool failureDetected;
-            void setAddressWidth(uint8_t a_width);
-            void setRetries(uint8_t delay, uint8_t count);
-            void setChannel(uint8_t channel);
-            uint8_t getChannel(void);
-            void setPayloadSize(uint8_t size);
-            uint8_t getPayloadSize(void);
-            uint8_t getDynamicPayloadSize(void);
-            void enableAckPayload(void);
-            void enableDynamicPayloads(void);
-            void disableDynamicPayloads(void);
-            void enableDynamicAck();
-            bool isPVariant(void) ;
-            void setAutoAck(bool enable);
-            void setAutoAck(uint8_t pipe, bool enable) ;
-            void setPALevel ( uint8_t level );
-            uint8_t getPALevel( void );
-            bool setDataRate(rf24_datarate_e speed);
-            rf24_datarate_e getDataRate( void ) ;
-            void setCRCLength(rf24_crclength_e length);
-            rf24_crclength_e getCRCLength(void);
-            void disableCRC( void ) ;
-            void maskIRQ(bool tx_ok,bool tx_fail,bool rx_ready);
-            uint8_t flush_rx(void);
-            uint8_t enqueue_payload(const void* buf, uint8_t data_len);
-
-            uint32_t txDelay;
-            uint32_t csDelay;
-
-            //private:
-            void csn(GPIO_PinState mode);
-            void ce(GPIO_PinState level);
-            uint8_t read_register(uint8_t reg, uint8_t* buf, uint8_t len);
-            uint8_t read_register(uint8_t reg);
-            uint8_t write_register(uint8_t reg, const uint8_t* buf, uint8_t len);
-            uint8_t write_register(uint8_t reg, uint8_t value);
-            uint8_t read_payload(void* buf, uint8_t len);
-            uint8_t write_payload(const void* buf, uint8_t len, const uint8_t writeType);
-            uint8_t get_status(void);
-            void print_status(uint8_t status);
-            void print_observe_tx(uint8_t value);
-            void print_byte_register(const char* name, uint8_t reg, uint8_t qty = 1);
-            void print_address_register(const char* name, uint8_t reg, uint8_t qty = 1);
-            void toggle_features(void);
-            uint8_t spiTrans(uint8_t cmd);
-            void errNotify(void);
-        };
-
-        #endif // __RF24_H__
-
-        while(1) {
-            BSP_LED_Off(LED_ORANGE); // Reading done
-        } // while(1)
     }
 }
 
@@ -462,18 +334,26 @@ InitRadio(uint8_t isBase, uint8_t channelNumber) {
     uint8_t maxRetryNum = 0; // ARC bits
     rf24.setRetries(maxAckDelay, maxRetryNum);
 
-    // Set Rx & Tx Addresses, 5 bytes
-    if(isBase) {
+    // Set Role and Addresses
+    setRole(isBase ? PTX : PRX);
+//    rf24.printDetails();
+}
+
+
+void
+setRole(bool bPTX) {
+    if(bPTX) {
         rf24.openWritingPipe(pipes[0]);
         for(uint8_t i=1; i<6; i++) {
             rf24.openReadingPipe(i, pipes[i]);
+            rf24.stopListening(); // Change role from PRX to PTX...
         }
     }
     else {
         rf24.openWritingPipe(pipes[1]);
         rf24.openReadingPipe(1, pipes[0]);
+        rf24.startListening();
     }
-//    rf24.printDetails();
 }
 
 
@@ -598,27 +478,16 @@ Init_TIM2_Adc(void) {
 // extern "C" {
 void
 EXTI15_10_IRQHandler(void) { // We received a radio interrupt...
-    BSP_LED_Off(LED_GREEN);
-
     // Read & reset the IRQ status
     rf24.whatHappened(&tx_ok, &tx_failed, &rx_data_ready);
 
-    if(rx_data_ready) { // We have new audio data on rx FIFO
-        if(!isBaseStation) {
-            if(ready2Send) {
-                offset = currOutBuf*MAX_PAYLOAD_SIZE;
-                rf24.writeAckPayload(1, &txBuffer[offset], MAX_PAYLOAD_SIZE);
-                if(++currOutBuf >= bufNum)
-                    currOutBuf = 0;
-                BSP_LED_Off(LED_RED);
-            }
-            else {
-                BSP_LED_On(LED_RED);
-            }
-        }
-        BSP_LED_On(LED_ORANGE); // Signal the packet's start reading
-        rf24.read(inBuff, MAX_PAYLOAD_SIZE);
-        BSP_LED_Off(LED_ORANGE); // Reading done
+    if(isBaseStation) {
+        rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
+    }
+    BSP_LED_On(LED_BLUE); // Signal the packet's start reading
+    rf24.read(inBuff, MAX_PAYLOAD_SIZE);
+    BSP_LED_Off(LED_BLUE); // Reading done
+    if(wakedUp) {
         // Write data in the current chunk
         offset = chunk*MAX_PAYLOAD_SIZE;
         for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
@@ -628,13 +497,17 @@ EXTI15_10_IRQHandler(void) { // We received a radio interrupt...
         }
         // We have done with the new data...
     }
+    else {
+        // Aggiungere il test del comando ricevuto !!!
+        wakedUp = true;
+    }
 
-    if(isBaseStation && tx_ok) { // TX_DS IRQ asserted when the ACK packet has been received.
+    if(!isBaseStation && tx_ok) { // TX_DS IRQ asserted when the ACK packet has been received.
         BSP_LED_Off(LED_RED); // Reset previous errors signal
         BSP_LED_On(LED_BLUE); // Signal a good transmission
     }
 
-    if(isBaseStation && tx_failed) {// nRF24L01+ asserts the IRQ pin when MAX_RT is reached
+    if(!isBaseStation && tx_failed) {// nRF24L01+ asserts the IRQ pin when MAX_RT is reached
                                     // but the payload in TX FIFO is NOT removed!
         BSP_LED_On(LED_RED);
         BSP_LED_Off(LED_ORANGE);
@@ -649,11 +522,9 @@ EXTI15_10_IRQHandler(void) { // We received a radio interrupt...
 void
 HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hAdc) {
     UNUSED(hAdc);
-    for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
-        txBuffer[indx] = (adcDataIn[indx+MAX_PAYLOAD_SIZE] >> 8) & 0xFF;
+    for(uint8_t i=0; i<MAX_PAYLOAD_SIZE; i++) {
+        txBuffer[i] = (adcDataIn[i+MAX_PAYLOAD_SIZE] >> 8) & 0xFF;
     }
-    rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-    ready2Send = true;
 }
 
 
@@ -661,11 +532,9 @@ HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hAdc) {
 void
 HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hAdc) {
     UNUSED(hAdc);
-    for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
-        txBuffer[indx] = (adcDataIn[indx] >> 8) & 0xFF;
+    for(uint16_t i=0; i<MAX_PAYLOAD_SIZE; i++) {
+        txBuffer[i] = (pcmDataOut[i<<1] >> 8) & 0xFF;
     }
-    rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-    ready2Send = true;
 }
 
 
@@ -697,29 +566,21 @@ BSP_AUDIO_OUT_TransferComplete_CallBack(void) {
 
 void
 BSP_AUDIO_IN_TransferComplete_CallBack(void) {
-    BSP_AUDIO_IN_PDMToPCM(&pdmDataIn[INTERNAL_BUFF_SIZE/2],
-                          pcmDataOut);
-    offset = currInBuf*PCM_OUT_SIZE;
+    BSP_AUDIO_IN_PDMToPCM(&pdmDataIn[INTERNAL_BUFF_SIZE/2], pcmDataOut);
     for(uint16_t i=0; i<PCM_OUT_SIZE; i++) {
-        txBuffer[i+offset] = (pcmDataOut[i<<1] >> 8) & 0xFF;
+        txBuffer[i+PCM_OUT_SIZE] = (pcmDataOut[i<<1] >> 8) & 0xFF;
     }
-    if(currInBuf > bufNum)
-        ready2Send = true;
-    if(++currInBuf >= 2*bufNum)
-        currInBuf = 0;
+    rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+    ready2Send = true;
 }
 
 
 void
 BSP_AUDIO_IN_HalfTransfer_CallBack(void) {
-    BSP_AUDIO_IN_PDMToPCM((uint16_t*)&pdmDataIn[0],
-                          (uint16_t*)&pcmDataOut[0]);
-    offset = currInBuf*PCM_OUT_SIZE;
+    BSP_AUDIO_IN_PDMToPCM((uint16_t*)&pdmDataIn[0], (uint16_t*)&pcmDataOut[0]);
     for(uint16_t i=0; i<PCM_OUT_SIZE; i++) {
-        txBuffer[i+offset] = (pcmDataOut[i<<1] >> 8) & 0xFF;
+        txBuffer[i] = (pcmDataOut[i<<1] >> 8) & 0xFF;
     }
-    if(++currInBuf >= 2*bufNum)
-        currInBuf = 0;
 }
 
 
@@ -757,8 +618,7 @@ HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi) {
 void
 EXTI0_IRQHandler(void) {
     //rf24.stopListening();
-    //rf24.write(&wakeUpCommand, 1);
-    wakeUp = true;
+    wakedUp = true;
     HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
 }
 

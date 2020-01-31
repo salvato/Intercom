@@ -61,6 +61,7 @@ public:
     bool begin(uint8_t channelNumber, uint32_t preempPriority);
     void enableIRQ();
     void disableIRQ();
+    void clearInterrupts();
     bool isChipConnected();
     void startListening(void);
     void stopListening(void);
