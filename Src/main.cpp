@@ -202,7 +202,7 @@ __IO uint16_t currInBuf  = 0;
 __IO uint16_t currOutBuf = 0;
 uint16_t offset;
 
-__IO bool wakedUp = false;
+__IO bool sleeping = true;
 uint8_t wakeUpCommand = 0x10;
 
 
@@ -230,22 +230,29 @@ main(void) {
     InitRadio(isBaseStation, Channel); // Base is PTX, Remotes are PRXs
 
     // Let's wait for external events
-    BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_EXTI);
+    if(isBaseStation)
+        BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_EXTI);
 
     rf24.clearInterrupts();
     rf24.maskIRQ(false, false, false);
 
-    // An external event has been detected !
-    while(!wakedUp) {}
-    if(isBaseStation)
-        rf24.write(&wakeUpCommand, 1);
+    // if we are Base we will woken up only by button press
+    // if we are Remote we will woken up by receiving a command
+    while(sleeping) { // Wait an external event
+    }
 
+    // An external event has been detected !
+    initBuffers(isBaseStation);
+
+    if(isBaseStation) {
+        rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+        rf24.startWrite();
+    }
     status = BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
     if(status != AUDIO_OK) {
         Error_Handler();
     }
 
-    initBuffers(isBaseStation);
 
 //=====================================
     if(isBaseStation) { // Base Station
@@ -330,8 +337,8 @@ InitRadio(uint8_t isBase, uint8_t channelNumber) {
     if(!rf24.begin(channelNumber, RADIO_IN_IRQ_PREPRIO))
         Error_Handler();
 
-    uint8_t maxAckDelay = 1; // ARD bits (number of 250μs steps - 1)
-    uint8_t maxRetryNum = 0; // ARC bits
+    uint8_t maxAckDelay = 5; // ARD bits (number of 250μs steps - 1)
+    uint8_t maxRetryNum = 15; // ARC bits
     rf24.setRetries(maxAckDelay, maxRetryNum);
 
     // Set Role and Addresses
@@ -344,10 +351,10 @@ void
 setRole(bool bPTX) {
     if(bPTX) {
         rf24.openWritingPipe(pipes[0]);
-        for(uint8_t i=1; i<6; i++) {
+        for(uint8_t i=1; i<1; i++) {
             rf24.openReadingPipe(i, pipes[i]);
-            rf24.stopListening(); // Change role from PRX to PTX...
         }
+        //rf24.stopListening(); // Change role from PRX to PTX...
     }
     else {
         rf24.openWritingPipe(pipes[1]);
@@ -480,26 +487,27 @@ void
 EXTI15_10_IRQHandler(void) { // We received a radio interrupt...
     // Read & reset the IRQ status
     rf24.whatHappened(&tx_ok, &tx_failed, &rx_data_ready);
-
-    if(isBaseStation) {
-        rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
-    }
-    BSP_LED_On(LED_BLUE); // Signal the packet's start reading
-    rf24.read(inBuff, MAX_PAYLOAD_SIZE);
-    BSP_LED_Off(LED_BLUE); // Reading done
-    if(wakedUp) {
-        // Write data in the current chunk
-        offset = chunk*MAX_PAYLOAD_SIZE;
-        for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
-            offset = (chunk*MAX_PAYLOAD_SIZE+indx) << 1;
-            Audio_Out_Buffer[offset]   = inBuff[indx] << 8; // 1st Stereo Channel
-            Audio_Out_Buffer[offset+1] = inBuff[indx] << 8; // 2nd Stereo Channel
+    if(rx_data_ready) {
+        if(isBaseStation) {
+            rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
         }
-        // We have done with the new data...
-    }
-    else {
-        // Aggiungere il test del comando ricevuto !!!
-        wakedUp = true;
+        BSP_LED_On(LED_BLUE); // Signal the packet's start reading
+        rf24.read(inBuff, MAX_PAYLOAD_SIZE);
+        BSP_LED_Off(LED_BLUE); // Reading done
+        if(!sleeping) {
+            // Write data in the current chunk
+            offset = chunk*MAX_PAYLOAD_SIZE;
+            for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
+                offset = (chunk*MAX_PAYLOAD_SIZE+indx) << 1;
+                Audio_Out_Buffer[offset]   = inBuff[indx] << 8; // 1st Stereo Channel
+                Audio_Out_Buffer[offset+1] = inBuff[indx] << 8; // 2nd Stereo Channel
+            }
+            // We have done with the new data...
+        }
+        else {
+            // Aggiungere il test del comando ricevuto !!!
+            sleeping = false;
+        }
     }
 
     if(!isBaseStation && tx_ok) { // TX_DS IRQ asserted when the ACK packet has been received.
@@ -617,9 +625,8 @@ HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi) {
 /// This function handles External line 0 interrupt request.
 void
 EXTI0_IRQHandler(void) {
-    //rf24.stopListening();
-    wakedUp = true;
-    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
+    sleeping = false;
+    __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_0);
 }
 
 
