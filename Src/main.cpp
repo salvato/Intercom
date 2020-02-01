@@ -490,29 +490,58 @@ void
 EXTI15_10_IRQHandler(void) { // We received a radio interrupt...
     // Read & reset the IRQ status
     rf24.whatHappened(&tx_ok, &tx_failed, &rx_data_ready);
+
     if(rx_data_ready) {
-        if(isBaseStation && bConnected) {
-            rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
-        }
-        BSP_LED_On(LED_BLUE); // Signal the packet's start reading
-        rf24.read(inBuff, MAX_PAYLOAD_SIZE);
-        BSP_LED_Off(LED_BLUE); // Reading done
-        if(isBaseStation && ! bConnected) {
-            bConnected = true;
-        }
-        if(!sleeping) {
-            // Write data in the current chunk
-            offset = chunk*MAX_PAYLOAD_SIZE;
-            for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
-                offset = (chunk*MAX_PAYLOAD_SIZE+indx) << 1;
-                Audio_Out_Buffer[offset]   = inBuff[indx] << 8; // 1st Stereo Channel
-                Audio_Out_Buffer[offset+1] = inBuff[indx] << 8; // 2nd Stereo Channel
+        if(isBaseStation) {
+            if(bConnected) {// We are already connected so acknolwedge the packet first...
+                rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
+                // Then read the data...
+                BSP_LED_On(LED_BLUE); // Signal the packet's start reading
+                rf24.read(inBuff, MAX_PAYLOAD_SIZE);
+                BSP_LED_Off(LED_BLUE); // Reading done
+                // Write data in the current Audio out chunk...
+                offset = chunk*MAX_PAYLOAD_SIZE;
+                for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
+                    offset = (chunk*MAX_PAYLOAD_SIZE+indx) << 1;
+                    Audio_Out_Buffer[offset]   = inBuff[indx] << 8; // 1st Stereo Channel
+                    Audio_Out_Buffer[offset+1] = inBuff[indx] << 8; // 2nd Stereo Channel
+                }
+                // We have done with the new data.
             }
-            // We have done with the new data...
-        }
-        else {
-            // Aggiungere il test del comando ricevuto !!!
-            sleeping = false;
+            else { // We have time to read and decode the packet (the packet is an ACK one)
+                BSP_LED_On(LED_BLUE); // Signal the packet's start reading
+                rf24.read(inBuff, MAX_PAYLOAD_SIZE);
+                BSP_LED_Off(LED_BLUE); // Reading done
+                if(inBuff[0] == wakeUpCommand)
+                    bConnected = true;
+            }
+        } // end isBaseStation
+
+        else { // We are a Remote Station...
+            if(!bConnected) { // We are not yet connected
+                BSP_LED_On(LED_BLUE); // Signal the packet's start reading
+                rf24.read(inBuff, MAX_PAYLOAD_SIZE);
+                BSP_LED_Off(LED_BLUE); // Reading done
+                if(inBuff[0] == wakeUpCommand) {
+                    txBuffer[0] = wakeUpCommand;
+                    rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
+                    sleeping = false;
+                    bConnected = true;
+                }
+            }
+            else {
+                BSP_LED_On(LED_BLUE); // Signal the packet's start reading
+                rf24.read(inBuff, MAX_PAYLOAD_SIZE);
+                BSP_LED_Off(LED_BLUE); // Reading done
+                // Write data in the current chunk
+                offset = chunk*MAX_PAYLOAD_SIZE;
+                for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
+                    offset = (chunk*MAX_PAYLOAD_SIZE+indx) << 1;
+                    Audio_Out_Buffer[offset]   = inBuff[indx] << 8; // 1st Stereo Channel
+                    Audio_Out_Buffer[offset+1] = inBuff[indx] << 8; // 2nd Stereo Channel
+                }
+                // We have done with the new data...
+            }
         }
     }
 
