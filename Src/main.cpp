@@ -154,7 +154,6 @@ static void InitConfigPin();
 static void initLeds();
 static void InitADC();
 static void Init_TIM2_Adc(void);
-static void InitRadio(uint8_t isBaseStation, uint8_t channelNumber);
 static void initBuffers(bool isBaseStation);
 static void setRole(bool bPTX);
 static void ledsOff();
@@ -175,13 +174,13 @@ ADC_HandleTypeDef  hAdc;
 //       raises the Packet-Error-Rate.
 const uint8_t
 pipes[6][5] = { // Note that NRF24L01(+) expects address LSB first
-    {0x70, 0xCD, 0xAB, 0xCD, 0xAB},
-    {0x71, 0xCD, 0xAB, 0xCD, 0xAB},
-    {0x72, 0xCD, 0xAB, 0xCD, 0xAB},
-    {0x73, 0xCD, 0xAB, 0xCD, 0xAB},
-    {0x74, 0xCD, 0xAB, 0xCD, 0xAB},
-    {0x75, 0xCD, 0xAB, 0xCD, 0xAB}
-};
+                {0x70, 0xCD, 0xAB, 0xCD, 0xAB},
+                {0x71, 0xCD, 0xAB, 0xCD, 0xAB},
+                {0x72, 0xCD, 0xAB, 0xCD, 0xAB},
+                {0x73, 0xCD, 0xAB, 0xCD, 0xAB},
+                {0x74, 0xCD, 0xAB, 0xCD, 0xAB},
+                {0x75, 0xCD, 0xAB, 0xCD, 0xAB}
+              };
 
 
 RF24
@@ -226,7 +225,8 @@ int
 main(void) {
     const uint8_t Channel = 76;
     uint8_t Volume = 70;   // % of Max
-    ready2Send = false;
+    uint8_t maxAckDelay;
+    uint8_t maxRetryNum;
 
     // System startup
     HAL_Init();
@@ -240,125 +240,128 @@ main(void) {
     // Initialize the corresponding things..
     initBuffers(isBaseStation);
 
-//  while(1) {
-    // Base start as PTX and Remotes as PRXs
-    InitRadio(isBaseStation, Channel);
+    while(1) {
+        if(!rf24.begin(Channel, RADIO_IN_IRQ_PREPRIO))
+            Error_Handler();
 
-    // At first we don't need to bo very fast but reliable
-    uint8_t maxAckDelay = 5;  // ARD bits (number of 250μs steps - 1)
-    uint8_t maxRetryNum = 15; // ARC bits
-    rf24.setRetries(maxAckDelay, maxRetryNum);
+        // Base start as PTX and Remotes as PRXs
+        setRole(isBaseStation ? PTX : PRX);
 
-    // Avoid false interrupts from Radio
-    rf24.clearInterrupts();
-    rf24.maskIRQ(false, false, false);
+        // At first we don't need to bo very fast but reliable
+        maxAckDelay = 5;  // ARD bits (number of 250μs steps - 1)
+        maxRetryNum = 15; // ARC bits
+        rf24.setRetries(maxAckDelay, maxRetryNum);
+        //    rf24.printDetails();
 
-    bConnected = false;
-    bBaseSleeping = true;
+        // Avoid false interrupts from Radio
+        rf24.clearInterrupts();
+        rf24.maskIRQ(false, false, false);
 
-    BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_EXTI);
-
-    if(isBaseStation) {
-        // We will be woken up only by a button press
-        while(bBaseSleeping) {} // Wait an external event
-
-        // An external event has been detected: try to connect to a Remote !
         bConnected = false;
+        bBaseSleeping = true;
+
+        BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_EXTI);
+
         if(isBaseStation) {
-            uint32_t t0 = HAL_GetTick()-2000;
-            while(!bConnected) {
-                if(HAL_GetTick()-t0 > 1000) {
-                    t0 = HAL_GetTick();
-                    txBuffer[0] = connectRequest;
-                    BSP_LED_On(LED_BLUE);
-                    rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-                    rf24.startWrite();
-                    BSP_LED_Off(LED_BLUE);
+            // We will be woken up only by a button press
+            while(bBaseSleeping) {} // Wait an external event
+
+            // An external event has been detected: try to connect to a Remote !
+            bConnected = false;
+            if(isBaseStation) {
+                uint32_t t0 = HAL_GetTick()-2000;
+                while(!bConnected) {
+                    if(HAL_GetTick()-t0 > 1000) {
+                        t0 = HAL_GetTick();
+                        txBuffer[0] = connectRequest;
+                        BSP_LED_On(LED_BLUE);
+                        rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+                        rf24.startWrite();
+                        BSP_LED_Off(LED_BLUE);
+                    }
                 }
             }
         }
-    }
-    // Remote station...
-    else { // We will be woken up by receiving a command
-        while(!bConnected) {
-            BSP_LED_On(LED_RED);
-            HAL_Delay(1);
+        // Remote station...
+        else { // We will be woken up by receiving a command
+            while(!bConnected) {
+                BSP_LED_On(LED_RED);
+                HAL_Delay(1);
+                BSP_LED_Off(LED_RED);
+            }
             BSP_LED_Off(LED_RED);
         }
-        BSP_LED_Off(LED_RED);
-    }
 
-    // Base or Remote we are now connected and ready to talk...
-    bSuspend = false;
-    status = BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
-    if(status != AUDIO_OK) {
-        Error_Handler();
-    }
-
-
-//=====================================
-    if(isBaseStation) { // Base Station
-//=====================================
-        setRole(PRX); // Change role from PTX to PRX...
-        InitADC();
-        Init_TIM2_Adc();
-        // Enables ADC DMA requests and enables ADC peripheral
-        if(HAL_ADC_Start_DMA(&hAdc, (uint32_t*)adcDataIn, 2*MAX_PAYLOAD_SIZE) != HAL_OK) {
+        // Base or Remote we are now connected and ready to talk...
+        bSuspend = false;
+        status = BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
+        if(status != AUDIO_OK) {
             Error_Handler();
         }
 
-        chunk = 0;
-        BSP_AUDIO_OUT_Play(Audio_Out_Buffer, 2*MAX_PAYLOAD_SIZE);
-        rf24.maskIRQ(false, false, false);
-        // Enable ADC periodic sampling
-        if(HAL_TIM_Base_Start(&Tim2Handle) != HAL_OK) {
-            Error_Handler();
-        }
-        BSP_LED_On(LED_GREEN);
-        bSuspend = false;
-        while(!bSuspend) {
-        } // while(1)
-        ledsOff();
-        Error_Handler();
-    }
-//==========================
-    else { // Remote Station
-//==========================
-        setRole(PTX); // Change role from PRX to PTX...
-        uint8_t maxAckDelay = 1; // ARD bits (number of 250μs steps - 1)
-        uint8_t maxRetryNum = 0; // ARC bits
-        rf24.setRetries(maxAckDelay, maxRetryNum); // We have to be fast !!!
-        BSP_AUDIO_IN_Init(DEFAULT_AUDIO_IN_FREQ, DEFAULT_AUDIO_IN_BIT_RESOLUTION, DEFAULT_AUDIO_IN_CHANNEL_NBR);
-        BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE);
-        chunk = 0;
-        BSP_AUDIO_OUT_Play(Audio_Out_Buffer, 2*sizeof(*Audio_Out_Buffer)*MAX_PAYLOAD_SIZE);
-        rf24.maskIRQ(false, false, false);
 
-        bRadioIrq = true; // To force the first sending when we are ready to send
-        bSuspend = false;
-        while(!bSuspend) {
-            if(ready2Send && bRadioIrq) { // We will send data only when avaialble and
-                ready2Send = 0;           // the previous data were sent or lost !
-                bRadioIrq = false;
-                BSP_LED_Off(LED_ORANGE);
-                BSP_LED_Off(LED_BLUE);
-                BSP_LED_On(LED_GREEN);// Signal the start sending...
-                rf24.startWrite();
+        //=====================================
+        if(isBaseStation) { // Base Station
+            //=====================================
+            setRole(PRX); // Change role from PTX to PRX...
+            InitADC();
+            Init_TIM2_Adc();
+            // Enables ADC DMA requests and enables ADC peripheral
+            if(HAL_ADC_Start_DMA(&hAdc, (uint32_t*)adcDataIn, 2*MAX_PAYLOAD_SIZE) != HAL_OK) {
+                Error_Handler();
             }
-        } // while(!bSuspend)
-        ledsOff();
-        BSP_AUDIO_IN_Stop();               // Stop sending Audio Data
-        BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio
-        txBuffer[0] = suspendCmd;
-        BSP_LED_On(LED_BLUE);
-        rf24.flush_tx();
-        rf24.openWritingPipe(pipes[2]);
-        rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-        rf24.startWrite();
-        BSP_LED_Off(LED_BLUE);
-        Error_Handler();
-    }
-//  } // while(1)
+
+            chunk = 0;
+            BSP_AUDIO_OUT_Play(Audio_Out_Buffer, 2*MAX_PAYLOAD_SIZE);
+            rf24.maskIRQ(false, false, false);
+            // Enable ADC periodic sampling
+            if(HAL_TIM_Base_Start(&Tim2Handle) != HAL_OK) {
+                Error_Handler();
+            }
+            BSP_LED_On(LED_GREEN);
+            bSuspend = false;
+            while(!bSuspend) {
+            } // while(1)
+            ledsOff();
+        }
+        //==========================
+        else { // Remote Station
+            //==========================
+            setRole(PTX); // Change role from PRX to PTX...
+            ready2Send  = false;
+            maxAckDelay = 1; // ARD bits (number of 250μs steps - 1)
+            maxRetryNum = 0; // ARC bits
+            rf24.setRetries(maxAckDelay, maxRetryNum); // We have to be fast !!!
+            BSP_AUDIO_IN_Init(DEFAULT_AUDIO_IN_FREQ, DEFAULT_AUDIO_IN_BIT_RESOLUTION, DEFAULT_AUDIO_IN_CHANNEL_NBR);
+            BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE);
+            chunk = 0;
+            BSP_AUDIO_OUT_Play(Audio_Out_Buffer, 2*sizeof(*Audio_Out_Buffer)*MAX_PAYLOAD_SIZE);
+            rf24.maskIRQ(false, false, false);
+
+            bRadioIrq = true; // To force the first sending when we are ready to send
+            bSuspend = false;
+            while(!bSuspend) {
+                if(ready2Send && bRadioIrq) { // We will send data only when avaialble and
+                    ready2Send = 0;           // the previous data were sent or lost !
+                    bRadioIrq = false;
+                    BSP_LED_Off(LED_ORANGE);
+                    BSP_LED_Off(LED_BLUE);
+                    BSP_LED_On(LED_GREEN);// Signal the start sending...
+                    rf24.startWrite();
+                }
+            } // while(!bSuspend)
+            ledsOff();
+            BSP_AUDIO_IN_Stop();               // Stop sending Audio Data
+            BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio
+            txBuffer[0] = suspendCmd;
+            BSP_LED_On(LED_BLUE);
+            rf24.flush_tx();
+            rf24.openWritingPipe(pipes[2]);
+            rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+            rf24.startWrite();
+            BSP_LED_Off(LED_BLUE);
+        }
+    } // while(1)
 }
 
 
@@ -407,21 +410,6 @@ void
 BSP_AUDIO_OUT_ClockConfig(I2S_HandleTypeDef *hi2s, uint32_t AudioFreq, void *Params) {
     // Ensure the clock is the same for MIC input and DAC output
     BSP_AUDIO_IN_ClockConfig(hi2s, AudioFreq, Params);
-}
-
-
-void
-InitRadio(uint8_t isBase, uint8_t channelNumber) {
-    if(!rf24.begin(channelNumber, RADIO_IN_IRQ_PREPRIO))
-        Error_Handler();
-
-    uint8_t maxAckDelay = 5; // ARD bits (number of 250μs steps - 1)
-    uint8_t maxRetryNum = 15; // ARC bits
-    rf24.setRetries(maxAckDelay, maxRetryNum);
-
-    // Set Role and Addresses
-    setRole(isBase ? PTX : PRX);
-//    rf24.printDetails();
 }
 
 
@@ -514,7 +502,7 @@ InitADC() {
     if(HAL_ADC_Init(&hAdc) != HAL_OK) {
         Error_Handler();
     }
-// Configure ADC regular channel
+    // Configure ADC regular channel
     ADC_ChannelConfTypeDef sConfig;
     sConfig.Channel      = ADC1_CHANNEL;
     sConfig.Rank         = 1;
@@ -652,7 +640,7 @@ EXTI15_10_IRQHandler(void) { // We received a radio interrupt...
     }
 
     if(!isBaseStation && tx_failed) {// nRF24L01+ asserts the IRQ pin when MAX_RT is reached
-                                     // but the payload in TX FIFO is NOT removed!
+        // but the payload in TX FIFO is NOT removed!
         BSP_LED_On(LED_RED);
         BSP_LED_Off(LED_ORANGE);
         BSP_LED_Off(LED_BLUE);
@@ -685,14 +673,14 @@ HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hAdc) {
 /// ADC Error callback
 void
 HAL_ADC_ErrorCallback(ADC_HandleTypeDef *hadc) {
-  UNUSED(hadc);
-  Error_Handler();
+    UNUSED(hadc);
+    Error_Handler();
 }
 
 
 void
 BSP_AUDIO_OUT_HalfTransfer_CallBack(void) {
-//    BSP_LED_Toggle(LED_GREEN);
+    //    BSP_LED_Toggle(LED_GREEN);
 }
 
 
@@ -794,10 +782,10 @@ I2S2_IRQHandler(void) {
 
 void
 initLeds() {
-        BSP_LED_Init(LED3);
-        BSP_LED_Init(LED4);
-        BSP_LED_Init(LED5);
-        BSP_LED_Init(LED6);
+    BSP_LED_Init(LED3);
+    BSP_LED_Init(LED4);
+    BSP_LED_Init(LED5);
+    BSP_LED_Init(LED6);
 }
 
 
@@ -908,10 +896,10 @@ void
 delay_cycles(const int64_t cycles) {
     if(cycles < 0) return;
     switch(cycles % 3) {
-        default:
-        case 0: break;
-        case 1: asm __volatile__ ("nop"); break;
-        case 2: asm __volatile__ ("nop\nnop"); break;
+    default:
+    case 0: break;
+    case 1: asm __volatile__ ("nop"); break;
+    case 2: asm __volatile__ ("nop\nnop"); break;
     }
     if(cycles > 3)
         _delay_3t((uint32_t)(cycles / 3));
