@@ -1,4 +1,4 @@
-#include "main.h"
+﻿#include "main.h"
 #include "RF24.h"
 #include "printf.h"
 #include "string.h"
@@ -13,19 +13,19 @@
 
 
 
-/*------------------------------------------------------------------------------
-             Audio Driver Configuration parameters
---------------------------------------------------------------------------------
-#define DEFAULT_AUDIO_IN_FREQ                 I2S_AUDIOFREQ_16K
-#define DEFAULT_AUDIO_IN_BIT_RESOLUTION       16
-#define DEFAULT_AUDIO_IN_CHANNEL_NBR          1 // Mono = 1, Stereo = 2
-#define DEFAULT_AUDIO_IN_VOLUME               64
+//------------------------------------------------------------------------------
+//             Audio Driver Configuration parameters
+//--------------------------------------------------------------------------------
+// DEFAULT_AUDIO_IN_FREQ                 I2S_AUDIOFREQ_16K
+// DEFAULT_AUDIO_IN_BIT_RESOLUTION       16
+// DEFAULT_AUDIO_IN_CHANNEL_NBR          1 // Mono = 1, Stereo = 2
+// DEFAULT_AUDIO_IN_VOLUME               64
 // PDM buffer input size
-#define INTERNAL_BUFF_SIZE                    128*DEFAULT_AUDIO_IN_FREQ/16000*DEFAULT_AUDIO_IN_CHANNEL_NBR
+// INTERNAL_BUFF_SIZE                    128*DEFAULT_AUDIO_IN_FREQ/16000*DEFAULT_AUDIO_IN_CHANNEL_NBR
 // PCM buffer output size
-#define PCM_OUT_SIZE                          DEFAULT_AUDIO_IN_FREQ/1000
-#define CHANNEL_DEMUX_MASK                    0x55
--------------------------------------------------------------------------------*/
+// PCM_OUT_SIZE                          DEFAULT_AUDIO_IN_FREQ/1000
+// CHANNEL_DEMUX_MASK                    0x55
+//-------------------------------------------------------------------------------
 
 
 
@@ -202,10 +202,12 @@ __IO uint16_t currInBuf  = 0;
 __IO uint16_t currOutBuf = 0;
 uint16_t offset;
 
-__IO bool sleeping = true;
+__IO bool bBaseSleeping;
 __IO bool bConnected;
 
-uint8_t wakeUpCommand = 0x10;
+
+uint8_t connectRequest = 0x10;
+uint8_t connectionAck  = 0x11;
 
 
 int
@@ -219,38 +221,58 @@ main(void) {
     initLeds();
     SystemClock_Config();
 
-    // Allocate common buffers... (The receive buffer and the Audio Out one)
-    if(!inBuff)
-        inBuff = (uint8_t*)malloc(MAX_PAYLOAD_SIZE*sizeof(*inBuff));
-    if(!Audio_Out_Buffer)
-        Audio_Out_Buffer = (uint16_t*)malloc(2*2*MAX_PAYLOAD_SIZE*sizeof(*Audio_Out_Buffer));
-    memset(Audio_Out_Buffer, 0, 2*2*MAX_PAYLOAD_SIZE*sizeof(uint16_t));
-
     // Are we Base station or Remote ?
     InitConfigPin();
     isBaseStation = HAL_GPIO_ReadPin(CONFIGURE_PORT, CONFIGURE_PIN);
-    InitRadio(isBaseStation, Channel); // Base is PTX, Remotes are PRXs
 
+    // Initialize the corresponding things..
+    initBuffers(isBaseStation);
+
+    // Base start as PTX and Remotes as PRXs
+    InitRadio(isBaseStation, Channel);
+
+    // At first we don't need to bo very fast but reliable
+    uint8_t maxAckDelay = 5;  // ARD bits (number of 250μs steps - 1)
+    uint8_t maxRetryNum = 15; // ARC bits
+    rf24.setRetries(maxAckDelay, maxRetryNum);
+
+    // Avoid false interrupts from Radio
     rf24.clearInterrupts();
     rf24.maskIRQ(false, false, false);
 
+    bConnected = false;
+    bBaseSleeping = true;
+
     if(isBaseStation) {
         BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_EXTI);
-        // if we are Base we will woken up only by button press
-        // if we are Remote we will woken up by receiving a command
-        while(sleeping) { // Wait an external event
-        }
-        // An external event has been detected !
-        initBuffers(isBaseStation);
+        // We will be woken up only by a button press
+        while(bBaseSleeping) {} // Wait an external event
+
+        // An external event has been detected: try to connect to a Remote !
         bConnected = false;
         if(isBaseStation) {
+            for(uint8_t i=0; i<MAX_PAYLOAD_SIZE; i++)
+                txBuffer[i] = connectRequest;
             while(!bConnected) {
-                rf24.write(txBuffer, MAX_PAYLOAD_SIZE);
-                HAL_Delay(100);
+                HAL_Delay(300);
+                BSP_LED_On(LED_BLUE);
+                rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+                rf24.startWrite();
+                BSP_LED_Off(LED_BLUE);
             }
         }
     }
+    // Remote station...
+    else { // We will be woken up by receiving a command
+        while(!bConnected) {
+            BSP_LED_On(LED_RED);
+            HAL_Delay(1);
+            BSP_LED_Off(LED_RED);
+        }
+        BSP_LED_Off(LED_RED);
+    }
 
+    // Base or Remote we are now connected and ready to talk...
     status = BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
     if(status != AUDIO_OK) {
         Error_Handler();
@@ -309,6 +331,14 @@ main(void) {
 
 void
 initBuffers(bool isBaseStation) {
+    // Allocate common buffers... (The receive buffer and the Audio Out one)
+    if(!inBuff)
+        inBuff = (uint8_t*)malloc(MAX_PAYLOAD_SIZE*sizeof(*inBuff));
+    if(!Audio_Out_Buffer)
+        Audio_Out_Buffer = (uint16_t*)malloc(2*2*MAX_PAYLOAD_SIZE*sizeof(*Audio_Out_Buffer));
+    memset(inBuff,           0, MAX_PAYLOAD_SIZE*sizeof(*inBuff));
+    memset(Audio_Out_Buffer, 0, 2*2*MAX_PAYLOAD_SIZE*sizeof(*Audio_Out_Buffer));
+
     if(isBaseStation) {
         if(!adcDataIn)
             adcDataIn = (uint16_t*)malloc(2*MAX_PAYLOAD_SIZE*sizeof(*adcDataIn));
@@ -518,8 +548,12 @@ EXTI15_10_IRQHandler(void) { // We received a radio interrupt...
                 BSP_LED_On(LED_BLUE); // Signal the packet's start reading
                 rf24.read(inBuff, MAX_PAYLOAD_SIZE);
                 BSP_LED_Off(LED_BLUE); // Reading done
-                if(inBuff[0] == wakeUpCommand)
+                if(inBuff[0] == connectRequest) {
+                    txBuffer[0] = connectionAck;
+                    rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+                    rf24.startWrite();
                     bConnected = true;
+                }
             }
         } // end isBaseStation
 
@@ -528,10 +562,13 @@ EXTI15_10_IRQHandler(void) { // We received a radio interrupt...
                 BSP_LED_On(LED_BLUE); // Signal the packet's start reading
                 rf24.read(inBuff, MAX_PAYLOAD_SIZE);
                 BSP_LED_Off(LED_BLUE); // Reading done
-                if(inBuff[0] == wakeUpCommand) {
-                    txBuffer[0] = wakeUpCommand;
+                if(inBuff[0] == connectRequest) {
+                    txBuffer[0] = connectRequest;
+                    BSP_LED_On(LED_ORANGE);
                     rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
-                    sleeping = false;
+                    BSP_LED_Off(LED_ORANGE);
+                }
+                if(inBuff[0] == connectionAck) {
                     bConnected = true;
                 }
             }
@@ -666,7 +703,7 @@ HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi) {
 /// This function handles External line 0 interrupt request.
 void
 EXTI0_IRQHandler(void) {
-    sleeping = false;
+    bBaseSleeping = false;
     __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_0);
 }
 
