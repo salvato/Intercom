@@ -910,9 +910,8 @@ RF24::available(void) {
 bool
 RF24::available(uint8_t* pipe_num) {
     if (!( read_register(FIFO_STATUS) & _BV(RX_EMPTY) )) {
-
         // If the caller wants the pipe number, include that
-        if ( pipe_num ) {
+        if(pipe_num) {
             uint8_t status = get_status();
             *pipe_num = ( status >> RX_P_NO ) & 0x07;
         }

@@ -147,6 +147,7 @@ static void Init_TIM2_Adc(void);
 static void InitRadio(uint8_t isBaseStation, uint8_t channelNumber);
 static void initBuffers(bool isBaseStation);
 static void setRole(bool bPTX);
+static void ledsOff();
 
 char buf[255];
 
@@ -204,10 +205,12 @@ uint16_t offset;
 
 __IO bool bBaseSleeping;
 __IO bool bConnected;
+__IO bool bSuspend;      // true if the Remote ask to suspend the connection
 
 
 uint8_t connectRequest = 0x10;
 uint8_t connectionAck  = 0x11;
+uint8_t suspendCmd     = 0x12; // Do we need an acknowledge ?
 
 
 int
@@ -243,8 +246,9 @@ main(void) {
     bConnected = false;
     bBaseSleeping = true;
 
+    BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_EXTI);
+
     if(isBaseStation) {
-        BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_EXTI);
         // We will be woken up only by a button press
         while(bBaseSleeping) {} // Wait an external event
 
@@ -275,6 +279,7 @@ main(void) {
     }
 
     // Base or Remote we are now connected and ready to talk...
+    bSuspend = false;
     status = BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
     if(status != AUDIO_OK) {
         Error_Handler();
@@ -300,8 +305,11 @@ main(void) {
             Error_Handler();
         }
         BSP_LED_On(LED_GREEN);
-        while(1) {
+        bSuspend = false;
+        while(!bSuspend) {
         } // while(1)
+        ledsOff();
+        Error_Handler();
     }
 //==========================
     else { // Remote Station
@@ -317,7 +325,8 @@ main(void) {
         rf24.maskIRQ(false, false, false);
 
         bRadioIrq = true; // To force the first sending when we are ready to send
-        while(1) {
+        bSuspend = false;
+        while(!bSuspend) {
             if(ready2Send && bRadioIrq) { // We will send data only when avaialble and
                 ready2Send = 0;           // the previous data were sent or lost !
                 bRadioIrq = false;
@@ -326,8 +335,28 @@ main(void) {
                 BSP_LED_On(LED_GREEN);// Signal the start sending...
                 rf24.startWrite();
             }
-        } // while(1)
+        } // while(!bSuspend)
+        ledsOff();
+        BSP_AUDIO_IN_Stop();               // Stop sending Audio Data
+        BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio
+        txBuffer[0] = suspendCmd;
+        BSP_LED_On(LED_BLUE);
+        rf24.flush_tx();
+        rf24.openWritingPipe(pipes[2]);
+        rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+        rf24.startWrite();
+        BSP_LED_Off(LED_BLUE);
+        Error_Handler();
     }
+}
+
+
+void
+ledsOff() {
+    BSP_LED_Off(LED_ORANGE);
+    BSP_LED_Off(LED_GREEN);
+    BSP_LED_Off(LED_BLUE);
+    BSP_LED_Off(LED_RED);
 }
 
 
@@ -389,7 +418,7 @@ void
 setRole(bool bPTX) {
     if(bPTX) {
         rf24.openWritingPipe(pipes[0]);
-        for(uint8_t i=1; i<1; i++) {
+        for(uint8_t i=1; i<6; i++) {
             rf24.openReadingPipe(i, pipes[i]);
         }
         rf24.stopListening(); // Change role from PRX to PTX...
@@ -397,6 +426,9 @@ setRole(bool bPTX) {
     else {
         rf24.openWritingPipe(pipes[1]);
         rf24.openReadingPipe(1, pipes[0]);
+        for(uint8_t i=2; i<6; i++) {
+            rf24.openReadingPipe(i, pipes[i]);
+        }
         rf24.startListening();
     }
 }
@@ -532,19 +564,32 @@ EXTI15_10_IRQHandler(void) { // We received a radio interrupt...
     if(rx_data_ready) {
         if(isBaseStation) {
             if(bConnected) {// We are already connected so acknolwedge the packet first...
-                rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
-                // Then read the data...
-                BSP_LED_On(LED_BLUE); // Signal the packet's start reading
-                rf24.read(inBuff, MAX_PAYLOAD_SIZE);
-                BSP_LED_Off(LED_BLUE); // Reading done
-                // Write data in the current Audio out chunk...
-                offset = chunk*MAX_PAYLOAD_SIZE;
-                for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
-                    offset = (chunk*MAX_PAYLOAD_SIZE+indx) << 1;
-                    Audio_Out_Buffer[offset]   = inBuff[indx] << 8; // 1st Stereo Channel
-                    Audio_Out_Buffer[offset+1] = inBuff[indx] << 8; // 2nd Stereo Channel
+                uint8_t pipe_num;
+                rf24.available(&pipe_num);
+                if(pipe_num == 2) {// The packet is a command
+                    BSP_LED_On(LED_BLUE); // Signal the packet's start reading
+                    rf24.read(inBuff, MAX_PAYLOAD_SIZE);
+                    BSP_LED_Off(LED_BLUE); // Reading done
+                    if(inBuff[0] == suspendCmd) {
+                        txBuffer[0] = suspendCmd;
+                        bSuspend = true;
+                    }
+                    rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
                 }
-                // We have done with the new data.
+                else { // The packet contains Audio Data
+                    rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
+                    // Then read the data...
+                    BSP_LED_On(LED_BLUE); // Signal the packet's start reading
+                    rf24.read(inBuff, MAX_PAYLOAD_SIZE);
+                    BSP_LED_Off(LED_BLUE); // Reading done
+                    // Write data in the current Audio out chunk...
+                    offset = chunk*MAX_PAYLOAD_SIZE;
+                    for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
+                        offset = (chunk*MAX_PAYLOAD_SIZE+indx) << 1;
+                        Audio_Out_Buffer[offset]   = inBuff[indx] << 8; // 1st Stereo Channel
+                        Audio_Out_Buffer[offset+1] = inBuff[indx] << 8; // 2nd Stereo Channel
+                    }
+                }// We have done with the new data.
             }
             else { // We have time to read and decode the packet (the packet is an ACK one)
                 BSP_LED_On(LED_BLUE); // Signal the packet's start reading
@@ -705,7 +750,11 @@ HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi) {
 /// This function handles External line 0 interrupt request.
 void
 EXTI0_IRQHandler(void) {
-    bBaseSleeping = false;
+    if(isBaseStation)
+        bBaseSleeping = false;
+    else {
+        bSuspend = true;
+    }
     __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_0);
 }
 
@@ -762,10 +811,7 @@ InitConfigPin() {
 void
 NonFatalError_Handler(void) {// 2 sec of led blinking
     uint32_t t0 = HAL_GetTick();
-    BSP_LED_Off(LED3);
-    BSP_LED_Off(LED4);
-    BSP_LED_Off(LED5);
-    BSP_LED_Off(LED6);
+    ledsOff();
     while(HAL_GetTick()-t0 < 1000) {
         HAL_Delay(100);
         BSP_LED_Toggle(LED3);
@@ -779,10 +825,7 @@ NonFatalError_Handler(void) {// 2 sec of led blinking
 
 void
 Error_Handler(void) {
-    BSP_LED_Off(LED3);
-    BSP_LED_Off(LED4);
-    BSP_LED_Off(LED5);
-    BSP_LED_Off(LED6);
+    ledsOff();
     while(1) {
         HAL_Delay(80);
         BSP_LED_Toggle(LED3);
