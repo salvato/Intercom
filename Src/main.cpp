@@ -21,9 +21,9 @@
 // DEFAULT_AUDIO_IN_CHANNEL_NBR          1 // Mono = 1, Stereo = 2
 // DEFAULT_AUDIO_IN_VOLUME               64
 // PDM buffer input size
-// INTERNAL_BUFF_SIZE                    128*DEFAULT_AUDIO_IN_FREQ/16000*DEFAULT_AUDIO_IN_CHANNEL_NBR
+//     INTERNAL_BUFF_SIZE                128*DEFAULT_AUDIO_IN_FREQ/16000*DEFAULT_AUDIO_IN_CHANNEL_NBR
 // PCM buffer output size
-// PCM_OUT_SIZE                          DEFAULT_AUDIO_IN_FREQ/1000
+//     PCM_OUT_SIZE                      DEFAULT_AUDIO_IN_FREQ/1000
 // CHANNEL_DEMUX_MASK                    0x55
 //-------------------------------------------------------------------------------
 
@@ -56,12 +56,14 @@
 // PD4      RESET
 //===============================================================
 
+
 //===============================================================
 //                 MP45DT02 Microphone Pinout (use I2S2==SPI2)
 //===============================================================
 // PB10     CLK
 // PC3      DOUT (MOSI)
 //===============================================================
+
 
 //===============================================================
 //                 CONFIGURE_PIN
@@ -71,6 +73,7 @@
 //===============================================================
 #define CONFIGURE_PIN  GPIO_PIN_1
 #define CONFIGURE_PORT GPIOC
+
 
 //===============================================================
 //                 nRF24L01+ (Use SPI1)
@@ -95,6 +98,7 @@
 #define PTX               true
 #define PRX               !PTX
 
+
 //===============================================================
 //                 ADC
 //===============================================================
@@ -113,10 +117,12 @@
 #define ADC1_FORCE_RESET()              __HAL_RCC_ADC_FORCE_RESET()
 #define ADC1_RELEASE_RESET()            __HAL_RCC_ADC_RELEASE_RESET()
 
+
 //===============================================================
-//                 TIM2
+//                 TIM2 (ADC Sampling Clock)
 //===============================================================
 #define TIM2_CLK_ENABLE()               __HAL_RCC_TIM2_CLK_ENABLE()
+
 
 //===============================================================
 //                 LEDs by Colours
@@ -125,6 +131,7 @@
 #define LED_GREEN   LED4
 #define LED_RED     LED5
 #define LED_BLUE    LED6
+
 
 //===============================================================
 // Interrupt Priorities
@@ -139,6 +146,9 @@
 #define RADIO_IN_IRQ_PREPRIO            0x0F
 
 
+//===============================================================
+// Local Functions
+//===============================================================
 static void SystemClock_Config(void);
 static void InitConfigPin();
 static void initLeds();
@@ -149,10 +159,13 @@ static void initBuffers(bool isBaseStation);
 static void setRole(bool bPTX);
 static void ledsOff();
 
+
 char buf[255];
+
 
 TIM_HandleTypeDef  Tim2Handle;
 ADC_HandleTypeDef  hAdc;
+
 
 uint32_t chunk = 0;
 bool     isBaseStation;
@@ -190,7 +203,7 @@ rf24(NRF24_CE_PORT,  NRF24_CE_PIN,
      NRF24_CSN_PORT, NRF24_CSN_PIN,
      NRF24_IRQ_PORT, NRF24_IRQ_PIN, NRF24_IRQ_CHAN);
 
-
+// Data Buffers
 uint16_t* adcDataIn        = NULL;
 uint16_t* Audio_Out_Buffer = NULL;
 uint8_t*  txBuffer         = NULL;
@@ -198,7 +211,6 @@ uint16_t* pdmDataIn        = NULL;
 uint16_t* pcmDataOut       = NULL;
 uint8_t*  inBuff           = NULL;
 
-uint16_t bufNum          = 2*16;
 __IO uint16_t currInBuf  = 0;
 __IO uint16_t currOutBuf = 0;
 uint16_t offset;
@@ -375,17 +387,17 @@ initBuffers(bool isBaseStation) {
             adcDataIn = (uint16_t*)malloc(2*MAX_PAYLOAD_SIZE*sizeof(*adcDataIn));
         if(!txBuffer)
             txBuffer  = (uint8_t *)malloc(MAX_PAYLOAD_SIZE*sizeof(*txBuffer));
-        memset(adcDataIn,  0, bufNum*MAX_PAYLOAD_SIZE*sizeof(*adcDataIn));
-        memset(txBuffer,   0, bufNum*MAX_PAYLOAD_SIZE*sizeof(*txBuffer));
+        memset(adcDataIn,  0, 2*MAX_PAYLOAD_SIZE*sizeof(*adcDataIn));
+        memset(txBuffer,   0, 2*MAX_PAYLOAD_SIZE*sizeof(*txBuffer));
     }
     else {
         if(!txBuffer)
-            txBuffer = (uint8_t *)malloc(bufNum*MAX_PAYLOAD_SIZE*sizeof(*txBuffer));
+            txBuffer = (uint8_t *)malloc(2*MAX_PAYLOAD_SIZE*sizeof(*txBuffer));
         if(!pdmDataIn)
             pdmDataIn = (uint16_t*)malloc(INTERNAL_BUFF_SIZE*sizeof(*pdmDataIn));
         if(!pcmDataOut)
             pcmDataOut = (uint16_t*)malloc(PCM_OUT_SIZE*sizeof(*pcmDataOut));
-        memset(txBuffer,   0, bufNum*MAX_PAYLOAD_SIZE*sizeof(*txBuffer));
+        memset(txBuffer,   0, 2*MAX_PAYLOAD_SIZE*sizeof(*txBuffer));
         memset(pdmDataIn,  0, INTERNAL_BUFF_SIZE*sizeof(*pdmDataIn));
         memset(pcmDataOut, 0, PCM_OUT_SIZE*sizeof(*pcmDataOut));
     }
