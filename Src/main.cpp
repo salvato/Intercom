@@ -251,14 +251,16 @@ main(void) {
         // An external event has been detected: try to connect to a Remote !
         bConnected = false;
         if(isBaseStation) {
-            for(uint8_t i=0; i<MAX_PAYLOAD_SIZE; i++)
-                txBuffer[i] = connectRequest;
+            uint32_t t0 = HAL_GetTick()-2000;
             while(!bConnected) {
-                HAL_Delay(300);
-                BSP_LED_On(LED_BLUE);
-                rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-                rf24.startWrite();
-                BSP_LED_Off(LED_BLUE);
+                if(HAL_GetTick()-t0 > 1000) {
+                    t0 = HAL_GetTick();
+                    txBuffer[0] = connectRequest;
+                    BSP_LED_On(LED_BLUE);
+                    rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+                    rf24.startWrite();
+                    BSP_LED_Off(LED_BLUE);
+                }
             }
         }
     }
@@ -390,7 +392,7 @@ setRole(bool bPTX) {
         for(uint8_t i=1; i<1; i++) {
             rf24.openReadingPipe(i, pipes[i]);
         }
-        //rf24.stopListening(); // Change role from PRX to PTX...
+        rf24.stopListening(); // Change role from PRX to PTX...
     }
     else {
         rf24.openWritingPipe(pipes[1]);
@@ -619,7 +621,7 @@ void
 HAL_ADC_ConvHalfCpltCallback(ADC_HandleTypeDef* hAdc) {
     UNUSED(hAdc);
     for(uint16_t i=0; i<MAX_PAYLOAD_SIZE; i++) {
-        txBuffer[i] = (pcmDataOut[i<<1] >> 8) & 0xFF;
+        txBuffer[i] = (adcDataIn[i] >> 8) & 0xFF;
     }
 }
 
