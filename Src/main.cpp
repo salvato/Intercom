@@ -283,6 +283,9 @@ main(void) {
     else { // Remote Station
 //==========================
         setRole(PTX); // Change role from PRX to PTX...
+        uint8_t maxAckDelay = 1; // ARD bits (number of 250μs steps - 1)
+        uint8_t maxRetryNum = 0; // ARC bits
+        rf24.setRetries(maxAckDelay, maxRetryNum); // We have to be fast !!!
         BSP_AUDIO_IN_Init(DEFAULT_AUDIO_IN_FREQ, DEFAULT_AUDIO_IN_BIT_RESOLUTION, DEFAULT_AUDIO_IN_CHANNEL_NBR);
         BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE);
         chunk = 0;
@@ -486,6 +489,9 @@ Init_TIM2_Adc(void) {
 
 
 // extern "C" {
+// Probabilmente questa routine di interrupt dura troppo tempo:
+// forse sarebbe meglio settare alcuni flags e lasciare che il
+// lavoro lungo venga svolto all'esterno: TO DO LATER...
 void
 EXTI15_10_IRQHandler(void) { // We received a radio interrupt...
     // Read & reset the IRQ status
@@ -542,7 +548,7 @@ EXTI15_10_IRQHandler(void) { // We received a radio interrupt...
                 }
                 // We have done with the new data...
             }
-        }
+        } // end Remote Station
     }
 
     if(!isBaseStation && tx_ok) { // TX_DS IRQ asserted when the ACK packet has been received.
@@ -551,7 +557,7 @@ EXTI15_10_IRQHandler(void) { // We received a radio interrupt...
     }
 
     if(!isBaseStation && tx_failed) {// nRF24L01+ asserts the IRQ pin when MAX_RT is reached
-                                    // but the payload in TX FIFO is NOT removed!
+                                     // but the payload in TX FIFO is NOT removed!
         BSP_LED_On(LED_RED);
         BSP_LED_Off(LED_ORANGE);
         BSP_LED_Off(LED_BLUE);
