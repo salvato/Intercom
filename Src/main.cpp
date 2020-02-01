@@ -167,20 +167,6 @@ TIM_HandleTypeDef  Tim2Handle;
 ADC_HandleTypeDef  hAdc;
 
 
-uint32_t chunk = 0;
-bool     isBaseStation;
-uint8_t  Volume;
-uint8_t  status;
-
-
-__IO bool    tx_ok;
-__IO bool    tx_failed;
-__IO bool    rx_data_ready;
-__IO bool    bRadioIrq;
-__IO uint8_t ready2Send;
-__IO bool    bReady2Play;
-
-
 // nRF Addresses
 // Note: Addresses where the level shifts only one time (that is, 000FFFFFFF)
 //       can often be detected in noise and can give a false detection,
@@ -210,26 +196,37 @@ uint8_t*  txBuffer         = NULL;
 uint16_t* pdmDataIn        = NULL;
 uint16_t* pcmDataOut       = NULL;
 uint8_t*  inBuff           = NULL;
+uint16_t  offset;
 
-__IO uint16_t currInBuf  = 0;
-__IO uint16_t currOutBuf = 0;
-uint16_t offset;
 
+uint32_t chunk = 0;
+bool     isBaseStation;
+uint8_t  status;
+
+
+__IO bool tx_ok;
+__IO bool tx_failed;
+__IO bool rx_data_ready;
+__IO bool bRadioIrq;
+__IO bool ready2Send;
+__IO bool bReady2Play;
 __IO bool bBaseSleeping;
 __IO bool bConnected;
 __IO bool bSuspend;      // true if the Remote ask to suspend the connection
 
 
+// Commands
 uint8_t connectRequest = 0x10;
 uint8_t connectionAck  = 0x11;
-uint8_t suspendCmd     = 0x12; // Do we need an acknowledge ?
+uint8_t suspendCmd     = 0x12;
+uint8_t suspendAck     = 0x13; // Do we need an acknowledge ?
 
 
 int
 main(void) {
     const uint8_t Channel = 76;
-    Volume = 70;   // % of Max
-    ready2Send = 0;
+    uint8_t Volume = 70;   // % of Max
+    ready2Send = false;
 
     // System startup
     HAL_Init();
@@ -243,6 +240,7 @@ main(void) {
     // Initialize the corresponding things..
     initBuffers(isBaseStation);
 
+//  while(1) {
     // Base start as PTX and Remotes as PRXs
     InitRadio(isBaseStation, Channel);
 
@@ -360,6 +358,7 @@ main(void) {
         BSP_LED_Off(LED_BLUE);
         Error_Handler();
     }
+//  } // while(1)
 }
 
 
