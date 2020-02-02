@@ -145,6 +145,8 @@
 //#define AUDIO_IN_IRQ_PREPRIO            0x0D
 #define RADIO_IN_IRQ_PREPRIO            0x0F
 
+#define MAX_CONNECTION_TIME 5000
+
 
 //===============================================================
 // Local Functions
@@ -212,6 +214,7 @@ __IO bool bReady2Play;
 __IO bool bBaseSleeping;
 __IO bool bConnected;
 __IO bool bSuspend;      // true if the Remote ask to suspend the connection
+__IO uint32_t startConnectTime;
 
 
 // Commands
@@ -227,6 +230,7 @@ main(void) {
     uint8_t Volume = 70;   // % of Max
     uint8_t maxAckDelay;
     uint8_t maxRetryNum;
+    uint32_t t0;
 
     // System startup
     HAL_Init();
@@ -255,22 +259,23 @@ main(void) {
 
         // Avoid false interrupts from Radio
         rf24.clearInterrupts();
+        // Now let's be ready for Radio interrupts
         rf24.maskIRQ(false, false, false);
 
         bConnected = false;
-        bBaseSleeping = true;
 
         BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_EXTI);
 
         if(isBaseStation) {
-            // We will be woken up only by a button press
-            while(bBaseSleeping) {} // Wait an external event
-
-            // An external event has been detected: try to connect to a Remote !
-            bConnected = false;
-            if(isBaseStation) {
-                uint32_t t0 = HAL_GetTick()-2000;
-                while(!bConnected) {
+            do {
+                bBaseSleeping = true;
+                // We will be woken up only by a button press
+                while(bBaseSleeping) {} // Wait an external event
+                // An external event has been detected: try to connect to a Remote !
+                bConnected = false;
+                t0 = HAL_GetTick()-2000;
+                // After a given time we have to give up and return sleeping
+                while(!bConnected && (HAL_GetTick()-startConnectTime < MAX_CONNECTION_TIME)) {
                     if(HAL_GetTick()-t0 > 1000) {
                         t0 = HAL_GetTick();
                         txBuffer[0] = connectRequest;
@@ -280,8 +285,9 @@ main(void) {
                         BSP_LED_Off(LED_BLUE);
                     }
                 }
-            }
+            } while(!bConnected);
         }
+
         // Remote station...
         else { // We will be woken up by receiving a command
             while(!bConnected) {
@@ -302,7 +308,7 @@ main(void) {
 
         //=====================================
         if(isBaseStation) { // Base Station
-            //=====================================
+        //=====================================
             setRole(PRX); // Change role from PTX to PRX...
             InitADC();
             Init_TIM2_Adc();
@@ -326,7 +332,7 @@ main(void) {
         }
         //==========================
         else { // Remote Station
-            //==========================
+        //==========================
             setRole(PTX); // Change role from PRX to PTX...
             ready2Send  = false;
             maxAckDelay = 1; // ARD bits (number of 250μs steps - 1)
@@ -749,8 +755,10 @@ HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi) {
 /// This function handles External line 0 interrupt request.
 void
 EXTI0_IRQHandler(void) {
-    if(isBaseStation)
+    if(isBaseStation) {
         bBaseSleeping = false;
+        startConnectTime = HAL_GetTick();
+    }
     else {
         bSuspend = true;
     }
