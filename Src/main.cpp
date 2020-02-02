@@ -145,7 +145,7 @@
 //#define AUDIO_IN_IRQ_PREPRIO            0x0D
 #define RADIO_IN_IRQ_PREPRIO            0x0F
 
-#define MAX_CONNECTION_TIME 30000
+#define MAX_CONNECTION_TIME             5000
 
 
 //===============================================================
@@ -198,7 +198,7 @@ uint16_t* pdmDataIn        = NULL;
 uint16_t* pcmDataOut       = NULL;
 uint8_t*  inBuff           = NULL;
 uint16_t  offset;
-uint16_t sound[32000];
+//uint16_t sound[32000];
 
 
 uint32_t chunk = 0;
@@ -247,10 +247,10 @@ main(void) {
 
     // Initialize the corresponding things..
     initBuffers(isBaseStation);
-    for(uint32_t i=0; i<16000; i++) {
-        sound[2*i]  = (i % 40) << 9;
-        sound[2*i+1] = (i % 40) << 9;
-    }
+//    for(uint32_t i=0; i<16000; i++) {
+//        sound[2*i]  = (i % 40) << 9;
+//        sound[2*i+1] = (i % 40) << 9;
+//    }
 
     while(1) {
         if(!rf24.begin(Channel, RADIO_IN_IRQ_PREPRIO))
@@ -260,7 +260,7 @@ main(void) {
         maxAckDelay = 5;  // ARD bits (number of 250μs steps - 1)
         maxRetryNum = 15; // ARC bits
         rf24.setRetries(maxAckDelay, maxRetryNum);
-        //    rf24.printDetails();
+        //rf24.printDetails();
 
         // Avoid false interrupts from Radio
         rf24.clearInterrupts();
@@ -270,34 +270,34 @@ main(void) {
         bConnected = false;
 
         if(isBaseStation) {
+            setRole(PTX);
+            rf24.maskIRQ(true, true, true);
             do {
-                setRole(PTX);
-                // Mask all Radio interrupts
-                rf24.maskIRQ(true, true, true);
-                bBaseSleeping = true;
-                // We will be woken up only by a button press
-                while(bBaseSleeping) {} // Wait an external event
-                // An external event has been detected: try to connect to a Remote !
                 bConnected = false;
-                t0 = HAL_GetTick()-2000;
-                // After a given time we have to give up and return sleeping
-                while(!bConnected && (HAL_GetTick()-startConnectTime < MAX_CONNECTION_TIME)) {
+                bBaseSleeping = true;
+                while(bBaseSleeping) {}
+
+                startConnectTime = HAL_GetTick();
+                t0 = startConnectTime-2000;
+                while(!bConnected &&
+                      (HAL_GetTick()-startConnectTime < MAX_CONNECTION_TIME))
+                {
                     if(HAL_GetTick()-t0 > 1000) {
                         t0 = HAL_GetTick();
                         txBuffer[0] = connectRequest;
-                        BSP_LED_On(LED_BLUE);
+                        BSP_LED_Toggle(LED_BLUE);
                         rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
                         rf24.startWrite();
-                        BSP_LED_Off(LED_BLUE);
                     }
-                    // Read & reset the IRQ status
-                    if(rf24.available()) {
+                    uint8_t iPipe;
+                    if(rf24.available(&iPipe)) { // Why don't we receive the ACK packet ????
                         rf24.read(inBuff, MAX_PAYLOAD_SIZE);
-                        if(inBuff[0] == connectionAck)
-                            bConnected = true;
+                        bConnected = (inBuff[0] == connectionAck);
                     }
                 }
+                BSP_LED_Off(LED_BLUE);
             } while(!bConnected);
+
             status = BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
             if(status != AUDIO_OK) {
                 Error_Handler();
@@ -326,13 +326,15 @@ main(void) {
                         startConnectTime = HAL_GetTick();
                         t0 = startConnectTime - 3001;
                         uint32_t elapsed = HAL_GetTick()-startConnectTime;
-                        while(!bConnectionAccepted  && (elapsed < MAX_CONNECTION_TIME)) {
+                        while(!bConnectionAccepted
+                              && (elapsed < MAX_CONNECTION_TIME)) {
                             if(HAL_GetTick()-t0 > 3000) {
-                                BSP_AUDIO_OUT_Play(sound, sizeof(sound));
+                                BSP_LED_Toggle(LED_ORANGE);
+                                //BSP_AUDIO_OUT_Play(sound, sizeof(sound));
                                 t0 = HAL_GetTick();
                             }
-                            if(HAL_GetTick()-t0 == 990)
-                                BSP_AUDIO_OUT_Stop(0);
+//                            if(HAL_GetTick()-t0 == 990)
+//                                BSP_AUDIO_OUT_Stop(0);
                             if(rf24.available()) {
                                 BSP_LED_On(LED_BLUE);
                                 rf24.read(inBuff, MAX_PAYLOAD_SIZE);
@@ -344,12 +346,13 @@ main(void) {
                         if(bConnectionAccepted) {
                             t0 = HAL_GetTick();
                             while(!bConnected && HAL_GetTick()-t0 < MAX_CONNECTION_TIME) {
-                                if(rf24.available()) {
-                                    rf24.read(inBuff, MAX_PAYLOAD_SIZE);
+                                uint8_t iPipe;
+                                if(rf24.available(&iPipe)) {
                                     if(inBuff[0] == connectRequest) {
                                         txBuffer[0] = connectionAck;
-                                        rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
+                                        rf24.writeAckPayload(iPipe, txBuffer, MAX_PAYLOAD_SIZE);
                                         bConnected = true;
+                                        rf24.read(inBuff, MAX_PAYLOAD_SIZE);
                                     }
                                 }
                             }
@@ -364,6 +367,7 @@ main(void) {
 
         // Base or Remote we are now connected and ready to talk...
         bSuspend = false;
+        HAL_Delay(1000);
 
 
         //=====================================
@@ -438,6 +442,7 @@ main(void) {
         //==========================
         else { // Remote Station
         //==========================
+            Error_Handler();
             setRole(PTX); // Change role from PRX to PTX...
             ready2Send  = false;
             maxAckDelay = 1; // ARD bits (number of 250μs steps - 1)
@@ -497,7 +502,7 @@ main(void) {
             rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
             rf24.startWrite();
             BSP_LED_Off(LED_BLUE);
-        }
+        } // End Remote Station
     } // while(1)
 }
 
