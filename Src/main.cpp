@@ -198,7 +198,6 @@ uint16_t* pdmDataIn        = NULL;
 uint16_t* pcmDataOut       = NULL;
 uint8_t*  inBuff           = NULL;
 uint16_t  offset;
-//uint16_t sound[32000];
 
 
 uint32_t chunk = 0;
@@ -231,6 +230,7 @@ uint8_t suspendAck     = 0x13;
 int
 main(void) {
     const uint8_t Channel = 76;
+    uint8_t pipe_num;
     uint8_t Volume = 70;   // % of Max
     uint8_t maxAckDelay;
     uint8_t maxRetryNum;
@@ -247,10 +247,6 @@ main(void) {
 
     // Initialize the corresponding things..
     initBuffers(isBaseStation);
-//    for(uint32_t i=0; i<16000; i++) {
-//        sound[2*i]  = (i % 40) << 9;
-//        sound[2*i+1] = (i % 40) << 9;
-//    }
 
     while(1) {
         if(!rf24.begin(Channel, RADIO_IN_IRQ_PREPRIO))
@@ -391,66 +387,47 @@ main(void) {
             bSuspend = false;
             while(!bSuspend) {
                 if(bRadioDataAvailable) {
-                    if(bConnected) {
-                        uint8_t pipe_num;
-                        rf24.available(&pipe_num);
-                        if(pipe_num == 2) {// The packet is a command
-                            BSP_LED_On(LED_BLUE); // Signal the packet's start reading
-                            rf24.read(inBuff, MAX_PAYLOAD_SIZE);
-                            BSP_LED_Off(LED_BLUE); // Reading done
-                            if(inBuff[0] == suspendCmd) {
-                                txBuffer[0] = suspendAck;
-                                bSuspend = true;
-                            }
-                            rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
-                        }
-                        else { // The packet contains Audio Data
-                            rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
-                            // Then read the data...
-                            BSP_LED_On(LED_BLUE); // Signal the packet's start reading
-                            rf24.read(inBuff, MAX_PAYLOAD_SIZE);
-                            BSP_LED_Off(LED_BLUE); // Reading done
-                            // Write data in the current Audio out chunk...
-                            offset = chunk*MAX_PAYLOAD_SIZE;
-                            for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
-                                offset = (chunk*MAX_PAYLOAD_SIZE+indx) << 1;
-                                Audio_Out_Buffer[offset]   = inBuff[indx] << 8; // 1st Stereo Channel
-                                Audio_Out_Buffer[offset+1] = inBuff[indx] << 8; // 2nd Stereo Channel
-                            }
-                        }
-                        //We have done with the new data.
-                    } // bConnected = true
-
-                    // We are not yet connected
-                    else { // We have time to read and decode the packet (the packet is an ACK one)
+                    rf24.available(&pipe_num);
+                    if(pipe_num == 2) {// The packet is a command
                         BSP_LED_On(LED_BLUE); // Signal the packet's start reading
                         rf24.read(inBuff, MAX_PAYLOAD_SIZE);
                         BSP_LED_Off(LED_BLUE); // Reading done
-                        if(inBuff[0] == connectRequest) {
-                            if(bConnectionAccepted) {
-                                txBuffer[0] = connectionAck;
-                                rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-                                rf24.startWrite();
-                                bConnected = true;
-                            }
+                        if(inBuff[0] == suspendCmd) {
+                            txBuffer[0] = suspendAck;
+                            bSuspend = true;
+                        }
+                        rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
+                    }
+                    else { // The packet contains Audio Data
+                        rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
+                        // Then read the data...
+                        BSP_LED_On(LED_BLUE); // Signal the packet's start reading
+                        rf24.read(inBuff, MAX_PAYLOAD_SIZE);
+                        BSP_LED_Off(LED_BLUE); // Reading done
+                        // Write data in the current Audio out chunk...
+                        offset = chunk*MAX_PAYLOAD_SIZE;
+                        for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
+                            offset = (chunk*MAX_PAYLOAD_SIZE+indx) << 1;
+                            Audio_Out_Buffer[offset]   = inBuff[indx] << 8; // 1st Stereo Channel
+                            Audio_Out_Buffer[offset+1] = inBuff[indx] << 8; // 2nd Stereo Channel
                         }
                     }
+                    //We have done with the new data.
                 }
-            } // while(1)
+            } // while(!bSuspend)
             ledsOff();
         }
         //==========================
         else { // Remote Station
         //==========================
-            Error_Handler();
             setRole(PTX); // Change role from PRX to PTX...
-            ready2Send  = false;
             maxAckDelay = 1; // ARD bits (number of 250μs steps - 1)
             maxRetryNum = 0; // ARC bits
             rf24.setRetries(maxAckDelay, maxRetryNum); // We have to be fast !!!
+            ready2Send  = false;
+            chunk = 0;
             BSP_AUDIO_IN_Init(DEFAULT_AUDIO_IN_FREQ, DEFAULT_AUDIO_IN_BIT_RESOLUTION, DEFAULT_AUDIO_IN_CHANNEL_NBR);
             BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE);
-            chunk = 0;
             BSP_AUDIO_OUT_Play(Audio_Out_Buffer, 2*sizeof(*Audio_Out_Buffer)*MAX_PAYLOAD_SIZE);
             rf24.maskIRQ(false, false, false);
 
@@ -458,30 +435,17 @@ main(void) {
             bSuspend = false;
             while(!bSuspend) {
                 if(bRadioDataAvailable) {
-                    if(!bConnected) { // We are not yet connected
-                        BSP_LED_On(LED_BLUE); // Signal the packet's start reading
-                        rf24.read(inBuff, MAX_PAYLOAD_SIZE);
-                        BSP_LED_Off(LED_BLUE); // Reading done
-                        if(inBuff[0] == connectRequest) {
-                            bConnectionRequested = true;
-                        }
-                        if(inBuff[0] == connectionAck) {
-                            bConnected = true;
-                        }
+                    BSP_LED_On(LED_BLUE); // Signal the packet's start reading
+                    rf24.read(inBuff, MAX_PAYLOAD_SIZE);
+                    BSP_LED_Off(LED_BLUE); // Reading done
+                    // Write data in the current chunk
+                    offset = chunk*MAX_PAYLOAD_SIZE;
+                    for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
+                        offset = (chunk*MAX_PAYLOAD_SIZE+indx) << 1;
+                        Audio_Out_Buffer[offset]   = inBuff[indx] << 8; // 1st Stereo Channel
+                        Audio_Out_Buffer[offset+1] = inBuff[indx] << 8; // 2nd Stereo Channel
                     }
-                    else {
-                        BSP_LED_On(LED_BLUE); // Signal the packet's start reading
-                        rf24.read(inBuff, MAX_PAYLOAD_SIZE);
-                        BSP_LED_Off(LED_BLUE); // Reading done
-                        // Write data in the current chunk
-                        offset = chunk*MAX_PAYLOAD_SIZE;
-                        for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
-                            offset = (chunk*MAX_PAYLOAD_SIZE+indx) << 1;
-                            Audio_Out_Buffer[offset]   = inBuff[indx] << 8; // 1st Stereo Channel
-                            Audio_Out_Buffer[offset+1] = inBuff[indx] << 8; // 2nd Stereo Channel
-                        }
-                        // We have done with the new data...
-                    }
+                    // We have done with the new data...
                 }
                 if(ready2Send && bRadioIrq) { // We will send data only when avaialble and
                     ready2Send = 0;           // the previous data were sent or lost !
