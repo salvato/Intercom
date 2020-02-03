@@ -210,7 +210,7 @@ __IO bool tx_failed;
 __IO bool rx_data_ready;
 __IO bool bRadioDataAvailable;
 __IO bool bRadioIrq;
-__IO bool ready2Send;
+__IO bool bReady2Send;
 __IO bool bReady2Play;
 __IO bool bBaseSleeping;
 __IO bool bConnected;
@@ -221,10 +221,10 @@ __IO uint32_t startConnectTime;
 
 
 // Commands
-uint8_t connectRequest = 0x10;
-uint8_t connectionAck  = 0x11;
-uint8_t suspendCmd     = 0x12;
-uint8_t suspendAck     = 0x13;
+uint8_t connectionRequest = 0x10;
+uint8_t connectionAck     = 0x11;
+uint8_t suspendCmd        = 0x12;
+uint8_t suspendAck        = 0x13;
 
 
 int
@@ -280,7 +280,7 @@ main(void) {
                 {
                     if(HAL_GetTick()-t0 > 1000) {
                         t0 = HAL_GetTick();
-                        txBuffer[0] = connectRequest;
+                        txBuffer[0] = connectionRequest;
                         BSP_LED_Toggle(LED_BLUE);
                         rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
                         rf24.startWrite();
@@ -312,7 +312,7 @@ main(void) {
                     BSP_LED_On(LED_BLUE);
                     rf24.read(inBuff, MAX_PAYLOAD_SIZE);
                     BSP_LED_Off(LED_BLUE);
-                    if(inBuff[0] == connectRequest) {
+                    if(inBuff[0] == connectionRequest) {
                         bConnectionRequested = true;
                         status = BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
                         if(status != AUDIO_OK) {
@@ -326,11 +326,8 @@ main(void) {
                               && (elapsed < MAX_CONNECTION_TIME)) {
                             if(HAL_GetTick()-t0 > 3000) {
                                 BSP_LED_Toggle(LED_ORANGE);
-                                //BSP_AUDIO_OUT_Play(sound, sizeof(sound));
                                 t0 = HAL_GetTick();
                             }
-//                            if(HAL_GetTick()-t0 == 990)
-//                                BSP_AUDIO_OUT_Stop(0);
                             if(rf24.available()) {
                                 BSP_LED_On(LED_BLUE);
                                 rf24.read(inBuff, MAX_PAYLOAD_SIZE);
@@ -344,7 +341,7 @@ main(void) {
                             while(!bConnected && HAL_GetTick()-t0 < MAX_CONNECTION_TIME) {
                                 uint8_t iPipe;
                                 if(rf24.available(&iPipe)) {
-                                    if(inBuff[0] == connectRequest) {
+                                    if(inBuff[0] == connectionRequest) {
                                         txBuffer[0] = connectionAck;
                                         rf24.writeAckPayload(iPipe, txBuffer, MAX_PAYLOAD_SIZE);
                                         bConnected = true;
@@ -417,6 +414,8 @@ main(void) {
             } // while(!bSuspend)
             ledsOff();
         }
+
+
         //==========================
         else { // Remote Station
         //==========================
@@ -424,7 +423,7 @@ main(void) {
             maxAckDelay = 1; // ARD bits (number of 250μs steps - 1)
             maxRetryNum = 0; // ARC bits
             rf24.setRetries(maxAckDelay, maxRetryNum); // We have to be fast !!!
-            ready2Send  = false;
+            bReady2Send  = false;
             chunk = 0;
             BSP_AUDIO_IN_Init(DEFAULT_AUDIO_IN_FREQ, DEFAULT_AUDIO_IN_BIT_RESOLUTION, DEFAULT_AUDIO_IN_CHANNEL_NBR);
             BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE);
@@ -446,8 +445,8 @@ main(void) {
                         Audio_Out_Buffer[offset+1] = inBuff[indx] << 8; // 2nd Stereo Channel
                     }
                 }
-                if(ready2Send && bRadioIrq) { // We will send data only when avaialble and
-                    ready2Send = false;           // the previous data were sent or lost !
+                if(bReady2Send && bRadioIrq) { // We will send data only when avaialble and
+                    bReady2Send = false;           // the previous data were sent or lost !
                     bRadioIrq = false;
                     BSP_LED_Off(LED_ORANGE);
                     BSP_LED_Off(LED_BLUE);
@@ -736,7 +735,7 @@ BSP_AUDIO_IN_TransferComplete_CallBack(void) {
         txBuffer[i+PCM_OUT_SIZE] = (pcmDataOut[i<<1] >> 8) & 0xFF;
     }
     rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-    ready2Send = true;
+    bReady2Send = true;
 }
 
 
