@@ -445,10 +445,9 @@ main(void) {
                         Audio_Out_Buffer[offset]   = inBuff[indx] << 8; // 1st Stereo Channel
                         Audio_Out_Buffer[offset+1] = inBuff[indx] << 8; // 2nd Stereo Channel
                     }
-                    // We have done with the new data...
                 }
                 if(ready2Send && bRadioIrq) { // We will send data only when avaialble and
-                    ready2Send = 0;           // the previous data were sent or lost !
+                    ready2Send = false;           // the previous data were sent or lost !
                     bRadioIrq = false;
                     BSP_LED_Off(LED_ORANGE);
                     BSP_LED_Off(LED_BLUE);
@@ -668,13 +667,13 @@ EXTI15_10_IRQHandler(void) { // We received a radio interrupt...
         bRadioDataAvailable = true;
     }
 
-    if(!isBaseStation && tx_ok) { // TX_DS IRQ asserted when the ACK packet has been received.
+    if(tx_ok) { // TX_DS IRQ asserted when the ACK packet has been received.
         BSP_LED_Off(LED_RED); // Reset previous errors signal
         BSP_LED_On(LED_BLUE); // Signal a good transmission
     }
 
-    if(!isBaseStation && tx_failed) {// nRF24L01+ asserts the IRQ pin when MAX_RT is reached
-        // but the payload in TX FIFO is NOT removed!
+    if(tx_failed) {// nRF24L01+ asserts the IRQ pin when MAX_RT is reached
+                   // but the payload in TX FIFO is NOT removed!
         BSP_LED_On(LED_RED);
         BSP_LED_Off(LED_ORANGE);
         BSP_LED_Off(LED_BLUE);
