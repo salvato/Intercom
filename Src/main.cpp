@@ -658,9 +658,7 @@ Init_TIM2_Adc(void) {
 
 
 // extern "C" {
-// Probabilmente questa routine di interrupt dura troppo tempo:
-// forse sarebbe meglio settare alcuni flags e lasciare che il
-// lavoro lungo venga svolto all'esterno: TO DO LATER...
+
 void
 EXTI15_10_IRQHandler(void) { // We received a radio interrupt...
     // Read & reset the IRQ status
@@ -814,7 +812,6 @@ void
 I2S3_IRQHandler(void) {
     HAL_DMA_IRQHandler(hAudioOutI2s.hdmatx);
 }
-
 
 
 /// This function handles DMA Stream interrupt request.
