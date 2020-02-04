@@ -145,8 +145,6 @@
 //#define AUDIO_IN_IRQ_PREPRIO            0x0D
 #define RADIO_IN_IRQ_PREPRIO            0x0F
 
-#define MAX_CONNECTION_TIME             5000
-
 
 //===============================================================
 // Local Functions
@@ -208,7 +206,6 @@ uint8_t  status;
 __IO bool tx_ok;
 __IO bool tx_failed;
 __IO bool rx_data_ready;
-__IO bool bRadioDataAvailable;
 __IO bool bRadioIrq;
 __IO bool bReady2Send;
 __IO bool bReady2Play;
@@ -217,21 +214,24 @@ __IO bool bConnected;
 __IO bool bConnectionRequested;
 __IO bool bConnectionAccepted;
 __IO bool bSuspend;      // true if the Remote ask to suspend the connection
+__IO bool bRadioDataAvailable;
 __IO uint32_t startConnectTime;
 
 
 // Commands
-uint8_t connectionRequest = 0x10;
-uint8_t connectionAck     = 0x11;
-uint8_t suspendCmd        = 0x12;
-uint8_t suspendAck        = 0x13;
+uint8_t connectRequest     = 0x10;
+uint8_t connectionAccepted = 0x11;
+uint8_t connectionAck      = 0x12;
+uint8_t suspendCmd         = 0x13;
+uint8_t suspendAck         = 0x14;
 
+#define MAX_CONNECTION_TIME  15000
 
 int
 main(void) {
     const uint8_t Channel = 76;
-    uint8_t pipe_num;
     uint8_t Volume = 70;   // % of Max
+    uint8_t pipe_num;
     uint8_t maxAckDelay;
     uint8_t maxRetryNum;
     uint32_t t0;
@@ -256,116 +256,107 @@ main(void) {
         maxAckDelay = 5;  // ARD bits (number of 250μs steps - 1)
         maxRetryNum = 15; // ARC bits
         rf24.setRetries(maxAckDelay, maxRetryNum);
-        //rf24.printDetails();
+        //    rf24.printDetails();
 
         // Avoid false interrupts from Radio
         rf24.clearInterrupts();
-
-        BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_EXTI);
+        rf24.maskIRQ(false, false, false);
 
         bConnected = false;
 
+        BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_EXTI);
+
+        //=====================
+        // Connection Phase....
+        //=====================
         if(isBaseStation) {
             setRole(PTX);
-            rf24.maskIRQ(true, true, true);
+            bBaseSleeping = true;
             do {
-                bConnected = false;
+                // We will be woken up only by a button press
+                while(bBaseSleeping) {
+                }
                 bBaseSleeping = true;
-                while(bBaseSleeping) {}
+                BSP_LED_Off(LED_ORANGE);
 
+                // An external event has been detected: try to connect to a Remote !
+                bConnected = false;
                 startConnectTime = HAL_GetTick();
                 t0 = startConnectTime-2000;
+                uint32_t elapsed = 0;
                 while(!bConnected &&
-                      (HAL_GetTick()-startConnectTime < MAX_CONNECTION_TIME))
+                      (elapsed < MAX_CONNECTION_TIME))
                 {
                     if(HAL_GetTick()-t0 > 1000) {
                         t0 = HAL_GetTick();
-                        txBuffer[0] = connectionRequest;
-                        BSP_LED_Toggle(LED_BLUE);
+                        txBuffer[0] = connectRequest;
+                        BSP_LED_On(LED_BLUE);
                         rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
                         rf24.startWrite();
+                        BSP_LED_Off(LED_BLUE);
                     }
-                    uint8_t iPipe;
-                    if(rf24.available(&iPipe)) { // Why don't we receive the ACK packet ????
+                    if(bRadioDataAvailable) {
+                        bRadioDataAvailable = false;
+                        BSP_LED_On(LED_BLUE); // Signal the packet's start reading
                         rf24.read(inBuff, MAX_PAYLOAD_SIZE);
-                        bConnected = (inBuff[0] == connectionAck);
+                        BSP_LED_Off(LED_BLUE); // Reading done
+                        if(inBuff[0] == connectionAccepted) {
+                            txBuffer[0] = connectionAck;
+                            rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+                            rf24.startWrite();
+                            bConnected = true;
+                        }
                     }
+                    elapsed = HAL_GetTick()-startConnectTime;
                 }
-                BSP_LED_Off(LED_BLUE);
+                ledsOff();
             } while(!bConnected);
-
-            status = BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
-            if(status != AUDIO_OK) {
-                Error_Handler();
-            }
         }
-
         // Remote station...
         else { // We will be woken up by receiving a command
             setRole(PRX);
-            // Mask all Radio interrupts
-            rf24.maskIRQ(true, true, true);
+            bConnectionAccepted = false;
             bConnectionRequested = false;
-            bConnected = false;
             while(!bConnected) {
-                if(rf24.available()) {
-                    BSP_LED_On(LED_BLUE);
+                BSP_LED_On(LED_RED);
+                if(bRadioDataAvailable) {
+                    bRadioDataAvailable = false;
+                    BSP_LED_On(LED_BLUE); // Signal the packet's start reading
                     rf24.read(inBuff, MAX_PAYLOAD_SIZE);
-                    BSP_LED_Off(LED_BLUE);
-                    if(inBuff[0] == connectionRequest) {
+                    BSP_LED_Off(LED_BLUE); // Reading done
+                    if(inBuff[0] == connectRequest) {
                         bConnectionRequested = true;
-                        status = BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
-                        if(status != AUDIO_OK) {
-                            Error_Handler();
-                        }
-                        bConnectionAccepted = false;
-                        startConnectTime = HAL_GetTick();
-                        t0 = startConnectTime - 3001;
-                        uint32_t elapsed = HAL_GetTick()-startConnectTime;
-                        while(!bConnectionAccepted
-                              && (elapsed < MAX_CONNECTION_TIME)) {
-                            if(HAL_GetTick()-t0 > 3000) {
-                                BSP_LED_Toggle(LED_ORANGE);
-                                t0 = HAL_GetTick();
-                            }
-                            if(rf24.available()) {
-                                BSP_LED_On(LED_BLUE);
-                                rf24.read(inBuff, MAX_PAYLOAD_SIZE);
-                                BSP_LED_Off(LED_BLUE);
-                            }
-                            elapsed = HAL_GetTick()-startConnectTime;
-                        }
-                        BSP_AUDIO_OUT_Stop(0);
                         if(bConnectionAccepted) {
-                            t0 = HAL_GetTick();
-                            while(!bConnected && HAL_GetTick()-t0 < MAX_CONNECTION_TIME) {
-                                uint8_t iPipe;
-                                if(rf24.available(&iPipe)) {
-                                    if(inBuff[0] == connectionRequest) {
-                                        txBuffer[0] = connectionAck;
-                                        rf24.writeAckPayload(iPipe, txBuffer, MAX_PAYLOAD_SIZE);
-                                        bConnected = true;
-                                        rf24.read(inBuff, MAX_PAYLOAD_SIZE);
-                                    }
-                                }
-                            }
+                            txBuffer[0] = connectionAccepted;
+                            BSP_LED_On(LED_ORANGE);
+                            rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
+                            BSP_LED_Off(LED_ORANGE);
                         }
-                        else
-                            bConnectionRequested = false;
+                    }
+                    if(inBuff[0] == connectionAck) {
+                        bConnected = true;
                     }
                 }
-            } // while(!bConnected)
+                BSP_LED_Off(LED_RED);
+            }
             BSP_LED_Off(LED_RED);
         }
 
+        //=======================
+        // Connection Established
+        //=======================
+
         // Base or Remote we are now connected and ready to talk...
         bSuspend = false;
-        HAL_Delay(1000);
+        status = BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
+        if(status != AUDIO_OK) {
+            Error_Handler();
+        }
 
 
         //=====================================
         if(isBaseStation) { // Base Station
-        //=====================================
+            //=====================================
             setRole(PRX); // Change role from PTX to PRX...
             InitADC();
             Init_TIM2_Adc();
@@ -382,18 +373,20 @@ main(void) {
             }
             BSP_LED_On(LED_GREEN);
             bSuspend = false;
+            bRadioDataAvailable = false;
             while(!bSuspend) {
                 if(bRadioDataAvailable) {
+                    bRadioDataAvailable = false;
                     rf24.available(&pipe_num);
                     if(pipe_num == 2) {// The packet is a command
                         BSP_LED_On(LED_BLUE); // Signal the packet's start reading
                         rf24.read(inBuff, MAX_PAYLOAD_SIZE);
                         BSP_LED_Off(LED_BLUE); // Reading done
                         if(inBuff[0] == suspendCmd) {
-                            txBuffer[0] = suspendAck;
+                            txBuffer[0] = suspendCmd;
                             bSuspend = true;
                         }
-                        rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
+                        rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
                     }
                     else { // The packet contains Audio Data
                         rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
@@ -408,32 +401,38 @@ main(void) {
                             Audio_Out_Buffer[offset]   = inBuff[indx] << 8; // 1st Stereo Channel
                             Audio_Out_Buffer[offset+1] = inBuff[indx] << 8; // 2nd Stereo Channel
                         }
-                    }
-                    //We have done with the new data.
-                }
+                    }// We have done with the new data.
+                } // if(bRadioDataAvailable)
             } // while(!bSuspend)
             ledsOff();
         }
-
-
         //==========================
         else { // Remote Station
-        //==========================
+            //==========================
             setRole(PTX); // Change role from PRX to PTX...
+            bReady2Send  = false;
             maxAckDelay = 1; // ARD bits (number of 250μs steps - 1)
             maxRetryNum = 0; // ARC bits
             rf24.setRetries(maxAckDelay, maxRetryNum); // We have to be fast !!!
-            bReady2Send  = false;
-            chunk = 0;
             BSP_AUDIO_IN_Init(DEFAULT_AUDIO_IN_FREQ, DEFAULT_AUDIO_IN_BIT_RESOLUTION, DEFAULT_AUDIO_IN_CHANNEL_NBR);
             BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE);
+            chunk = 0;
             BSP_AUDIO_OUT_Play(Audio_Out_Buffer, 2*sizeof(*Audio_Out_Buffer)*MAX_PAYLOAD_SIZE);
             rf24.maskIRQ(false, false, false);
 
             bRadioIrq = true; // To force the first sending when we are ready to send
             bSuspend = false;
             while(!bSuspend) {
+                if(bReady2Send && bRadioIrq) { // We will send data only when avaialble and
+                    bReady2Send = 0;           // the previous data were sent or lost !
+                    bRadioIrq = false;
+                    BSP_LED_Off(LED_ORANGE);
+                    BSP_LED_Off(LED_BLUE);
+                    BSP_LED_On(LED_GREEN);// Signal the start sending...
+                    rf24.startWrite();
+                }
                 if(bRadioDataAvailable) {
+                    bRadioDataAvailable = false;
                     BSP_LED_On(LED_BLUE); // Signal the packet's start reading
                     rf24.read(inBuff, MAX_PAYLOAD_SIZE);
                     BSP_LED_Off(LED_BLUE); // Reading done
@@ -444,14 +443,8 @@ main(void) {
                         Audio_Out_Buffer[offset]   = inBuff[indx] << 8; // 1st Stereo Channel
                         Audio_Out_Buffer[offset+1] = inBuff[indx] << 8; // 2nd Stereo Channel
                     }
-                }
-                if(bReady2Send && bRadioIrq) { // We will send data only when avaialble and
-                    bReady2Send = false;           // the previous data were sent or lost !
-                    bRadioIrq = false;
-                    BSP_LED_Off(LED_ORANGE);
-                    BSP_LED_Off(LED_BLUE);
-                    BSP_LED_On(LED_GREEN);// Signal the start sending...
-                    rf24.startWrite();
+                    // We have done with the new data...
+
                 }
             } // while(!bSuspend)
             ledsOff();
@@ -464,7 +457,7 @@ main(void) {
             rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
             rf24.startWrite();
             BSP_LED_Off(LED_BLUE);
-        } // End Remote Station
+        }
     } // while(1)
 }
 
@@ -520,11 +513,11 @@ BSP_AUDIO_OUT_ClockConfig(I2S_HandleTypeDef *hi2s, uint32_t AudioFreq, void *Par
 void
 setRole(bool bPTX) {
     if(bPTX) {
+        rf24.stopListening(); // Change role from PRX to PTX...
         rf24.openWritingPipe(pipes[0]);
         for(uint8_t i=1; i<6; i++) {
             rf24.openReadingPipe(i, pipes[i]);
         }
-        rf24.stopListening();
     }
     else {
         rf24.openWritingPipe(pipes[1]);
@@ -656,7 +649,9 @@ Init_TIM2_Adc(void) {
 
 
 // extern "C" {
-
+// Probabilmente questa routine di interrupt dura troppo tempo:
+// forse sarebbe meglio settare alcuni flags e lasciare che il
+// lavoro lungo venga svolto all'esterno: TO DO LATER...
 void
 EXTI15_10_IRQHandler(void) { // We received a radio interrupt...
     // Read & reset the IRQ status
@@ -666,13 +661,13 @@ EXTI15_10_IRQHandler(void) { // We received a radio interrupt...
         bRadioDataAvailable = true;
     }
 
-    if(tx_ok) { // TX_DS IRQ asserted when the ACK packet has been received.
+    if(!isBaseStation && tx_ok) { // TX_DS IRQ asserted when the ACK packet has been received.
         BSP_LED_Off(LED_RED); // Reset previous errors signal
         BSP_LED_On(LED_BLUE); // Signal a good transmission
     }
 
-    if(tx_failed) {// nRF24L01+ asserts the IRQ pin when MAX_RT is reached
-                   // but the payload in TX FIFO is NOT removed!
+    if(!isBaseStation && tx_failed) {// nRF24L01+ asserts the IRQ pin when MAX_RT is reached
+        // but the payload in TX FIFO is NOT removed!
         BSP_LED_On(LED_RED);
         BSP_LED_Off(LED_ORANGE);
         BSP_LED_Off(LED_BLUE);
@@ -712,7 +707,7 @@ HAL_ADC_ErrorCallback(ADC_HandleTypeDef *hadc) {
 
 void
 BSP_AUDIO_OUT_HalfTransfer_CallBack(void) {
-    //BSP_LED_Toggle(LED_ORANGE);
+    //    BSP_LED_Toggle(LED_GREEN);
 }
 
 
@@ -781,18 +776,16 @@ HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi) {
 /// This function handles External line 0 interrupt request.
 void
 EXTI0_IRQHandler(void) {
-    if(isBaseStation) {
+    if(isBaseStation)
         bBaseSleeping = false;
-        startConnectTime = HAL_GetTick();
-    }
-    else { // Remote Station
-        if(!bConnected) {
-            if(bConnectionRequested) {
-                bConnectionAccepted = true;
-            }
+    else {
+        if(bConnectionRequested) {
+            bConnectionRequested = false;
+            bConnectionAccepted = true;
         }
-        else
+        else {
             bSuspend = true;
+        }
     }
     __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_0);
 }
@@ -810,6 +803,7 @@ void
 I2S3_IRQHandler(void) {
     HAL_DMA_IRQHandler(hAudioOutI2s.hdmatx);
 }
+
 
 
 /// This function handles DMA Stream interrupt request.

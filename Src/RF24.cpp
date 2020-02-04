@@ -97,7 +97,7 @@ RF24::begin(uint8_t channelNumber, uint32_t preempPriority) {
     HAL_Delay(100); // To allow for nRF24L01+ powerup
 
     toggle_features();// Needed: See p46 of datasheet rev 2.0
-    write_register(EN_AA,  0);
+    write_register(EN_AA, 0);
     write_register(DYNPD, 0);
 
     // Configure nRF24L01+ module
@@ -134,7 +134,7 @@ RF24::begin(uint8_t channelNumber, uint32_t preempPriority) {
             _BV(ENAA_P5);
     write_register(EN_AA,  setup);
     if(read_register(EN_AA) != setup)
-        return false;
+        Error_Handler();
 
     // Enable Dynamic Payload Length on all pipes
     setup = _BV(DPL_P0) |
@@ -162,10 +162,6 @@ RF24::begin(uint8_t channelNumber, uint32_t preempPriority) {
     // Set the on Air Data Rate
     setDataRate(RF24_2MBPS);
 
-    // Reset current status : Notice reset and flush is the last thing we do
-    // Clear Interrupt Request...
-    clearInterrupts();
-
     setChannel(channelNumber);
 
     // Flush FIFO buffers
@@ -175,6 +171,8 @@ RF24::begin(uint8_t channelNumber, uint32_t preempPriority) {
     // Power up by default when begin() is called
     powerUp();
 
+    // Clear Interrupt Request...
+    clearInterrupts();
     // Enable hardware interrupts
     enableIRQ();
 
@@ -190,13 +188,14 @@ RF24::clearInterrupts() {
 
 void
 RF24::enableIRQ() {
+    __HAL_GPIO_EXTI_CLEAR_IT(irqn_type);
     HAL_NVIC_EnableIRQ(irqn_type);
 }
 
 
 void
 RF24::disableIRQ() {
-    HAL_NVIC_EnableIRQ(irqn_type);
+    HAL_NVIC_DisableIRQ(irqn_type);
 }
 
 
