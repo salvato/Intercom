@@ -385,10 +385,10 @@ main(void) {
                         rf24.read(inBuff, MAX_PAYLOAD_SIZE);
                         BSP_LED_Off(LED_BLUE); // Reading done
                         if(inBuff[0] == suspendCmd) {
-                            txBuffer[0] = suspendCmd;
+                            txBuffer[0] = suspendAck;
                             bSuspend = true;
+                            rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
                         }
-                        rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
                     }
                     else { // The packet contains Audio Data
                         rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
@@ -452,12 +452,16 @@ main(void) {
             ledsOff();
             BSP_AUDIO_IN_Stop();               // Stop sending Audio Data
             BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio
-            txBuffer[0] = suspendCmd;
-            BSP_LED_On(LED_BLUE);
-            rf24.flush_tx();
             rf24.openWritingPipe(pipes[2]);
-            rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-            rf24.startWrite();
+            rf24.flush_tx();
+            rf24.flush_rx();
+            BSP_LED_On(LED_BLUE);
+            for(uint8_t i=0; i<10; i++) {
+                txBuffer[0] = suspendCmd;
+                rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+                rf24.startWrite();
+                HAL_Delay(1);
+            }
             BSP_LED_Off(LED_BLUE);
         }
     } // while(1)
