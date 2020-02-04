@@ -234,71 +234,46 @@ uint8_t suspendAck         = 0x14;
 int
 main(void) {
     const uint8_t Channel = 76;
-    uint8_t Volume = 70;   // % of Max
-    uint8_t maxAckDelay;
-    uint8_t maxRetryNum;
+    uint8_t Volume        = 70;   // % of Max
 
     // System startup
     HAL_Init();
     initLeds();
     SystemClock_Config();
-
     // Are we Base station or Remote ?
     InitConfigPin();
     isBaseStation = HAL_GPIO_ReadPin(CONFIGURE_PORT, CONFIGURE_PIN);
-
     // Initialize the corresponding things..
     initBuffers(isBaseStation);
+    // Init Push Button(s)
+    BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_EXTI);
 
     while(1) {
-        if(!rf24.begin(Channel, RADIO_IN_IRQ_PREPRIO))
-            Error_Handler();
-
-        // At first we don't need to bo very fast but reliable
-        maxAckDelay = 5;  // ARD bits (number of 250μs steps - 1)
-        maxRetryNum = 15; // ARC bits
-        rf24.setRetries(maxAckDelay, maxRetryNum);
-        //    rf24.printDetails();
-
-        // Avoid false interrupts from Radio
-        rf24.clearInterrupts();
+        if(!rf24.begin(Channel, RADIO_IN_IRQ_PREPRIO)) Error_Handler();
+        rf24.clearInterrupts();// Avoid false interrupts from Radio
         rf24.maskIRQ(false, false, false);
-
-        BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_EXTI);
-
         //=====================
         // Connection Phase....
         //=====================
         if(isBaseStation) {
-            connectBase();
+            connectBase();// We will be woken up by a button press
         }
-        // Remote station...
-        else { // We will be woken up by receiving a command
-            connectRemote();
+        else {
+            connectRemote();// We will be woken up by receiving a command
         }
-
         //=======================
         // Connection Established
         //=======================
-
-        // Base or Remote we are now connected and ready to talk...
         bSuspend = false;
         status = BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
-        if(status != AUDIO_OK) {
-            Error_Handler();
-        }
-
-
-        //=====================================
-        if(isBaseStation) { // Base Station
-            //=====================================
+        if(status != AUDIO_OK) Error_Handler();
+        //====================
+        // Start Processing...
+        //====================
+        if(isBaseStation)
             processBase();
-        }
-        //==========================
-        else { // Remote Station
-            //==========================
+        else
             processRemote();
-        }
     } // while(1)
 }
 
@@ -306,11 +281,13 @@ main(void) {
 void
 connectRemote() {
     uint8_t pipe_num;
-    bool bConnected = false;
+    bool bRemoteConnected = false;
+    bConnectionAccepted   = false;
+    bConnectionRequested  = false;
     setRole(PRX);
-    bConnectionAccepted = false;
-    bConnectionRequested = false;
-    while(!bConnected) {
+    rf24.flush_rx();
+    rf24.setRetries(5, 15);//We don't need to bo very fast but reliable
+    while(!bRemoteConnected) {
         BSP_LED_On(LED_RED);
         if(bRadioDataAvailable) {
             rf24.available(&pipe_num);
@@ -328,7 +305,7 @@ connectRemote() {
                 }
             }
             if(inBuff[0] == connectionAck) {
-                bConnected = true;
+                bRemoteConnected = true;
             }
         }
         BSP_LED_Off(LED_RED);
@@ -340,13 +317,15 @@ connectRemote() {
 void
 connectBase() {
     setRole(PTX);
-    bBaseSleeping = true;
+    rf24.flush_tx();
+    // At first we don't need to bo very fast but reliable
+    rf24.setRetries(5, 15);
     bool bBaseConnected = false;
+    bBaseSleeping       = true;
     do {
         // We will be woken up only by a button press
         while(bBaseSleeping) {
         }
-        bBaseSleeping = true;
         BSP_LED_Off(LED_ORANGE);
         // An external event has been detected: try to connect to a Remote !
         startConnectTime = HAL_GetTick();
@@ -386,9 +365,10 @@ void
 processBase() {
     uint8_t pipe_num;
     setRole(PRX); // Change role from PTX to PRX...
-    uint8_t maxAckDelay = 1; // ARD bits (number of 250μs steps - 1)
-    uint8_t maxRetryNum = 0; // ARC bits
-    rf24.setRetries(maxAckDelay, maxRetryNum); // We have to be fast !!!
+    rf24.flush_rx();
+    rf24.setRetries(1, 0); // We have to be fast !!!
+    bSuspend = false;
+    bRadioDataAvailable = false;
     InitADC();
     Init_TIM2_Adc();
     // Enables ADC DMA requests and enables ADC peripheral
@@ -403,8 +383,6 @@ processBase() {
         Error_Handler();
     }
     BSP_LED_On(LED_GREEN);
-    bSuspend = false;
-    bRadioDataAvailable = false;
     while(!bSuspend) {
         if(bRadioDataAvailable) {
             bRadioDataAvailable = false;
@@ -442,10 +420,9 @@ processBase() {
 void
 processRemote() {
     setRole(PTX); // Change role from PRX to PTX...
+    rf24.flush_tx();
     bReady2Send  = false;
-    uint8_t maxAckDelay = 1; // ARD bits (number of 250μs steps - 1)
-    uint8_t maxRetryNum = 0; // ARC bits
-    rf24.setRetries(maxAckDelay, maxRetryNum); // We have to be fast !!!
+    rf24.setRetries(1, 0); // We have to be fast !!!
     BSP_AUDIO_IN_Init(DEFAULT_AUDIO_IN_FREQ, DEFAULT_AUDIO_IN_BIT_RESOLUTION, DEFAULT_AUDIO_IN_CHANNEL_NBR);
     BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE);
     chunk = 0;
