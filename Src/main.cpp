@@ -247,26 +247,26 @@ main(void) {
     initBuffers(isBaseStation);
     // Init Push Button(s)
     BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_EXTI);
+    if(!rf24.begin(Channel, RADIO_IN_IRQ_PREPRIO)) Error_Handler();
+    rf24.clearInterrupts();// Avoid false interrupts from Radio
+    rf24.maskIRQ(false, false, false);
 
     while(1) {
-        if(!rf24.begin(Channel, RADIO_IN_IRQ_PREPRIO)) Error_Handler();
-        rf24.clearInterrupts();// Avoid false interrupts from Radio
-        rf24.maskIRQ(false, false, false);
         //=====================
         // Connection Phase....
         //=====================
-        if(isBaseStation) {
+        if(isBaseStation)
             connectBase();// We will be woken up by a button press
-        }
-        else {
+        else
             connectRemote();// We will be woken up by receiving a command
-        }
         //=======================
         // Connection Established
         //=======================
         bSuspend = false;
-        status = BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
-        if(status != AUDIO_OK) Error_Handler();
+        if(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO,
+                              Volume,
+                              DEFAULT_AUDIO_IN_FREQ) != AUDIO_OK)
+            Error_Handler();
         //====================
         // Start Processing...
         //====================
@@ -379,9 +379,7 @@ processBase() {
     BSP_AUDIO_OUT_Play(Audio_Out_Buffer, 2*MAX_PAYLOAD_SIZE);
     rf24.maskIRQ(false, false, false);
     // Enable ADC periodic sampling
-    if(HAL_TIM_Base_Start(&Tim2Handle) != HAL_OK) {
-        Error_Handler();
-    }
+    if(HAL_TIM_Base_Start(&Tim2Handle) != HAL_OK) Error_Handler();
     BSP_LED_On(LED_GREEN);
     while(!bSuspend) {
         if(bRadioDataAvailable) {
@@ -395,6 +393,7 @@ processBase() {
                     txBuffer[0] = suspendAck;
                     bSuspend = true;
                     rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
+                    HAL_Delay(1000);
                 }
             }
             else { // The packet contains Audio Data
@@ -413,6 +412,8 @@ processBase() {
             }// We have done with the new data.
         } // if(bRadioDataAvailable)
     } // while(!bSuspend)
+    HAL_TIM_Base_Stop(&Tim2Handle);
+    BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio
     ledsOff();
 }
 
