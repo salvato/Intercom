@@ -157,6 +157,8 @@ static void Init_TIM2_Adc(void);
 static void initBuffers(bool isBaseStation);
 static void setRole(bool bPTX);
 static void ledsOff();
+static void connectBase();
+static void connectRemote();
 
 
 char buf[255];
@@ -210,7 +212,6 @@ __IO bool bRadioIrq;
 __IO bool bReady2Send;
 __IO bool bReady2Play;
 __IO bool bBaseSleeping;
-__IO bool bConnected;
 __IO bool bConnectionRequested;
 __IO bool bConnectionAccepted;
 __IO bool bSuspend;      // true if the Remote ask to suspend the connection
@@ -235,7 +236,6 @@ main(void) {
     uint8_t pipe_num;
     uint8_t maxAckDelay;
     uint8_t maxRetryNum;
-    uint32_t t0;
 
     // System startup
     HAL_Init();
@@ -263,85 +263,17 @@ main(void) {
         rf24.clearInterrupts();
         rf24.maskIRQ(false, false, false);
 
-        bConnected = false;
-
         BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_EXTI);
 
         //=====================
         // Connection Phase....
         //=====================
         if(isBaseStation) {
-            setRole(PTX);
-            bBaseSleeping = true;
-            do {
-                // We will be woken up only by a button press
-                while(bBaseSleeping) {
-                }
-                bBaseSleeping = true;
-                BSP_LED_Off(LED_ORANGE);
-
-                // An external event has been detected: try to connect to a Remote !
-                bConnected = false;
-                startConnectTime = HAL_GetTick();
-                t0 = startConnectTime-2000;
-                uint32_t elapsed = 0;
-                while(!bConnected &&
-                      (elapsed < MAX_CONNECTION_TIME))
-                {
-                    if(HAL_GetTick()-t0 > QUERY_INTERVAL) {
-                        t0 = HAL_GetTick();
-                        txBuffer[0] = connectRequest;
-                        BSP_LED_On(LED_BLUE);
-                        rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-                        rf24.startWrite();
-                        BSP_LED_Off(LED_BLUE);
-                    }
-                    if(bRadioDataAvailable) {
-                        bRadioDataAvailable = false;
-                        BSP_LED_On(LED_BLUE); // Signal the packet's start reading
-                        rf24.read(inBuff, MAX_PAYLOAD_SIZE);
-                        BSP_LED_Off(LED_BLUE); // Reading done
-                        if(inBuff[0] == connectionAccepted) {
-                            txBuffer[0] = connectionAck;
-                            rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-                            rf24.startWrite();
-                            bConnected = true;
-                        }
-                    }
-                    elapsed = HAL_GetTick()-startConnectTime;
-                }
-                ledsOff();
-            } while(!bConnected);
+            connectBase();
         }
         // Remote station...
         else { // We will be woken up by receiving a command
-            setRole(PRX);
-            bConnectionAccepted = false;
-            bConnectionRequested = false;
-            while(!bConnected) {
-                BSP_LED_On(LED_RED);
-                if(bRadioDataAvailable) {
-                    rf24.available(&pipe_num);
-                    bRadioDataAvailable = false;
-                    BSP_LED_On(LED_BLUE); // Signal the packet's start reading
-                    rf24.read(inBuff, MAX_PAYLOAD_SIZE);
-                    BSP_LED_Off(LED_BLUE); // Reading done
-                    if(inBuff[0] == connectRequest) {
-                        bConnectionRequested = true;
-                        if(bConnectionAccepted) {
-                            txBuffer[0] = connectionAccepted;
-                            BSP_LED_On(LED_ORANGE);
-                            rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
-                            BSP_LED_Off(LED_ORANGE);
-                        }
-                    }
-                    if(inBuff[0] == connectionAck) {
-                        bConnected = true;
-                    }
-                }
-                BSP_LED_Off(LED_RED);
-            }
-            BSP_LED_Off(LED_RED);
+            connectRemote();
         }
 
         //=======================
@@ -465,6 +397,85 @@ main(void) {
             BSP_LED_Off(LED_BLUE);
         }
     } // while(1)
+}
+
+
+void
+connectRemote() {
+    uint8_t pipe_num;
+    bool bConnected = false;
+    setRole(PRX);
+    bConnectionAccepted = false;
+    bConnectionRequested = false;
+    while(!bConnected) {
+        BSP_LED_On(LED_RED);
+        if(bRadioDataAvailable) {
+            rf24.available(&pipe_num);
+            bRadioDataAvailable = false;
+            BSP_LED_On(LED_BLUE); // Signal the packet's start reading
+            rf24.read(inBuff, MAX_PAYLOAD_SIZE);
+            BSP_LED_Off(LED_BLUE); // Reading done
+            if(inBuff[0] == connectRequest) {
+                bConnectionRequested = true;
+                if(bConnectionAccepted) {
+                    txBuffer[0] = connectionAccepted;
+                    BSP_LED_On(LED_ORANGE);
+                    rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
+                    BSP_LED_Off(LED_ORANGE);
+                }
+            }
+            if(inBuff[0] == connectionAck) {
+                bConnected = true;
+            }
+        }
+        BSP_LED_Off(LED_RED);
+    }
+    BSP_LED_Off(LED_RED);
+}
+
+
+void
+connectBase() {
+    setRole(PTX);
+    bBaseSleeping = true;
+    bool bBaseConnected = false;
+    do {
+        // We will be woken up only by a button press
+        while(bBaseSleeping) {
+        }
+        bBaseSleeping = true;
+        BSP_LED_Off(LED_ORANGE);
+        // An external event has been detected: try to connect to a Remote !
+        startConnectTime = HAL_GetTick();
+        uint32_t t0 = startConnectTime-2000;
+        uint32_t elapsed = 0;
+        while(!bBaseConnected &&
+              (elapsed < MAX_CONNECTION_TIME))
+        {
+            if(HAL_GetTick()-t0 > QUERY_INTERVAL) {
+                t0 = HAL_GetTick();
+                txBuffer[0] = connectRequest;
+                BSP_LED_On(LED_BLUE);
+                rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+                rf24.startWrite();
+                BSP_LED_Off(LED_BLUE);
+            }
+            if(bRadioDataAvailable) {
+                bRadioDataAvailable = false;
+                BSP_LED_On(LED_BLUE); // Signal the packet's start reading
+                rf24.read(inBuff, MAX_PAYLOAD_SIZE);
+                BSP_LED_Off(LED_BLUE); // Reading done
+                if(inBuff[0] == connectionAccepted) {
+                    txBuffer[0] = connectionAck;
+                    rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+                    rf24.startWrite();
+                    bBaseConnected = true;
+                }
+            }
+            elapsed = HAL_GetTick()-startConnectTime;
+        }
+        ledsOff();
+    } while(!bBaseConnected);
 }
 
 
