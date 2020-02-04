@@ -321,6 +321,7 @@ main(void) {
             while(!bConnected) {
                 BSP_LED_On(LED_RED);
                 if(bRadioDataAvailable) {
+                    rf24.available(&pipe_num);
                     bRadioDataAvailable = false;
                     BSP_LED_On(LED_BLUE); // Signal the packet's start reading
                     rf24.read(inBuff, MAX_PAYLOAD_SIZE);
@@ -330,7 +331,7 @@ main(void) {
                         if(bConnectionAccepted) {
                             txBuffer[0] = connectionAccepted;
                             BSP_LED_On(LED_ORANGE);
-                            rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
+                            rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
                             BSP_LED_Off(LED_ORANGE);
                         }
                     }
@@ -390,7 +391,7 @@ main(void) {
                         rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
                     }
                     else { // The packet contains Audio Data
-                        rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
+                        rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
                         // Then read the data...
                         BSP_LED_On(LED_BLUE); // Signal the packet's start reading
                         rf24.read(inBuff, MAX_PAYLOAD_SIZE);
