@@ -461,15 +461,11 @@ processRemote() {
     BSP_AUDIO_IN_Stop();               // Stop sending Audio Data
     BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio
     rf24.openWritingPipe(pipes[2]);
-    rf24.flush_tx();
     rf24.flush_rx();
     BSP_LED_On(LED_BLUE);
-    for(uint8_t i=0; i<10; i++) {
-        txBuffer[0] = suspendCmd;
-        rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-        rf24.startWrite();
-        HAL_Delay(1);
-    }
+    txBuffer[0] = suspendCmd;
+    rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+    rf24.startWrite();
     BSP_LED_Off(LED_BLUE);
 }
 
