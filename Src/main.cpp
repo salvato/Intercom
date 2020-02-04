@@ -226,6 +226,7 @@ uint8_t suspendCmd         = 0x13;
 uint8_t suspendAck         = 0x14;
 
 #define MAX_CONNECTION_TIME  15000
+#define QUERY_INTERVAL       300
 
 int
 main(void) {
@@ -287,7 +288,7 @@ main(void) {
                 while(!bConnected &&
                       (elapsed < MAX_CONNECTION_TIME))
                 {
-                    if(HAL_GetTick()-t0 > 1000) {
+                    if(HAL_GetTick()-t0 > QUERY_INTERVAL) {
                         t0 = HAL_GetTick();
                         txBuffer[0] = connectRequest;
                         BSP_LED_On(LED_BLUE);
