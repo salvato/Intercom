@@ -94,6 +94,7 @@ Inc/cmsis_gcc.h
 Inc/cmsis_version.h
 Inc/core_cm4.h
 Inc/cs43l22.h
+Inc/ffconf.h
 Inc/lis302dl.h
 Inc/lis3dsh.h
 Inc/main.h
@@ -132,6 +133,7 @@ Inc/stm32f4xx_hal_tim.h
 Inc/stm32f4xx_hal_tim_ex.h
 Inc/stm32f4xx_it.h
 Inc/system_stm32f4xx.h
+Inc/usbh_diskio_dma.h
 Inc/waveplayer.h
 LICENSE
 Makefile
@@ -162,6 +164,7 @@ STM32_USB_Host_Library/Class/MTP/Src/usbh_mtp_ptp.c
 STM32_USB_Host_Library/Class/Template/Inc/usbh_template.h
 STM32_USB_Host_Library/Class/Template/Src/usbh_template.c
 STM32_USB_Host_Library/Core/Inc/usbh_conf_template.h
+STM32_USB_Host_Library/Core/Inc/usbh_core.h
 STM32_USB_Host_Library/Core/Inc/usbh_core.h
 STM32_USB_Host_Library/Core/Inc/usbh_ctlreq.h
 STM32_USB_Host_Library/Core/Inc/usbh_def.h

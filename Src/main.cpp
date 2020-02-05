@@ -247,34 +247,28 @@ USBH_HandleTypeDef hUSB_Host; /* USB Host handle */
 static void USBH_UserProcess(USBH_HandleTypeDef *pHost, uint8_t vId);
 
 
-/**
-  * @brief  User Process
-  * @param  phost: Host Handle
-  * @param  id: Host Library user message ID
-  * @retval None
-  */
 static void
 USBH_UserProcess (USBH_HandleTypeDef *pHost, uint8_t vId) {
-    switch (vId)
-    {
-    case HOST_USER_SELECT_CONFIGURATION:
-        break;
+    UNUSED(pHost);
+    switch (vId) {
+        case HOST_USER_SELECT_CONFIGURATION:
+            break;
 
-    case HOST_USER_DISCONNECTION:
-        WavePlayer_CallBack();
-        AppliState = APPLICATION_IDLE;
-        f_mount(NULL, (TCHAR const*)"", 0);
-        break;
+        case HOST_USER_DISCONNECTION:
+            WavePlayer_CallBack();
+            AppliState = APPLICATION_IDLE;
+            f_mount(NULL, (TCHAR const*)"", 0);
+            break;
 
-    case HOST_USER_CLASS_ACTIVE:
-        AppliState = APPLICATION_START;
-        break;
+        case HOST_USER_CLASS_ACTIVE:
+            AppliState = APPLICATION_START;
+            break;
 
-    case HOST_USER_CONNECTION:
-        break;
+        case HOST_USER_CONNECTION:
+            break;
 
-    default:
-        break;
+        default:
+            break;
     }
 }
 
@@ -285,10 +279,8 @@ playSound() {
     if(FATFS_LinkDriver(&USBH_Driver, USBDISKPath) == 0)     {
         // Init Host Library
         USBH_Init(&hUSB_Host, USBH_UserProcess, 0);
-
         // Add Supported Class
         USBH_RegisterClass(&hUSB_Host, USBH_MSC_CLASS);
-
         // Start Host Process
         USBH_Start(&hUSB_Host);
     }

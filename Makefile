@@ -110,6 +110,9 @@ AS_INCLUDES =
 C_INCLUDES =  \
 -IInc \
 -IHAL/Inc \
+-IFatFs/src \
+-ISTM32_USB_Host_Library/Core/Inc \
+-ISTM32_USB_Host_Library/Class/MSC/Inc \
 
 # compile gcc flags
 ASFLAGS = $(MCU) $(AS_DEFS) $(AS_INCLUDES) $(OPT) -Wall -fdata-sections -ffunction-sections
