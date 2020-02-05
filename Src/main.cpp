@@ -4,6 +4,9 @@
 #include "string.h"
 #include "stdlib.h"
 #include "nRF24L01.h"
+#include "ff.h"
+#include "ff_gen_drv.h"
+#include "usbh_diskio_dma.h"
 
 
 
@@ -230,6 +233,99 @@ uint8_t suspendAck         = 0x14;
 
 #define MAX_CONNECTION_TIME  15000
 #define QUERY_INTERVAL       300
+
+
+
+#define WAVE_NAME "0:audio_sample.wav"
+FATFS USBDISKFatFs;          /* File system object for USB disk logical drive */
+char USBDISKPath[4];         /* USB Host logical drive path */
+USBH_HandleTypeDef hUSB_Host; /* USB Host handle */
+
+
+static void USBH_UserProcess(USBH_HandleTypeDef *pHost, uint8_t vId);
+
+
+/**
+  * @brief Wave player.
+  * @param  None
+  * @retval None
+  */
+void
+WavePlayer_CallBack(void) {
+  if(AppliState != APPLICATION_IDLE)
+  {
+    /* Reset the Wave player variables */
+    RepeatState = REPEAT_ON;
+    AudioPlayStart = 0;
+    LEDsState = LEDS_OFF;
+    PauseResumeStatus = RESUME_STATUS;
+    WaveDataLength =0;
+    PressCount = 0;
+
+    /* Stop the Codec */
+    if(BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW) != AUDIO_OK)
+    {
+      Error_Handler();
+    }
+
+    /* Turn OFF LED3, LED4 and LED6 */
+    BSP_LED_Off(LED3);
+    BSP_LED_Off(LED4);
+    BSP_LED_Off(LED6);
+  }
+}
+
+
+/**
+  * @brief  User Process
+  * @param  phost: Host Handle
+  * @param  id: Host Library user message ID
+  * @retval None
+  */
+static void
+USBH_UserProcess (USBH_HandleTypeDef *pHost, uint8_t vId) {
+    switch (vId)
+    {
+    case HOST_USER_SELECT_CONFIGURATION:
+        break;
+
+    case HOST_USER_DISCONNECTION:
+        WavePlayer_CallBack();
+        AppliState = APPLICATION_IDLE;
+        f_mount(NULL, (TCHAR const*)"", 0);
+        break;
+
+    case HOST_USER_CLASS_ACTIVE:
+        AppliState = APPLICATION_START;
+        break;
+
+    case HOST_USER_CONNECTION:
+        break;
+
+    default:
+        break;
+    }
+}
+
+
+void
+playSound() {
+    // Link the USB Host disk I/O
+    if(FATFS_LinkDriver(&USBH_Driver, USBDISKPath) == 0)     {
+        // Init Host Library
+        USBH_Init(&hUSB_Host, USBH_UserProcess, 0);
+
+        // Add Supported Class
+        USBH_RegisterClass(&hUSB_Host, USBH_MSC_CLASS);
+
+        // Start Host Process
+        USBH_Start(&hUSB_Host);
+    }
+}
+
+
+
+
 
 int
 main(void) {
