@@ -391,6 +391,38 @@ connectRemote() {
     setRole(PRX);
     rf24.flush_rx();
     rf24.setRetries(5, 15);//We don't need to bo very fast but reliable
+
+    while(!bRemoteConnected) {
+        BSP_LED_On(LED_RED);
+        if(bRadioDataAvailable) {
+            rf24.available(&pipe_num);
+            bRadioDataAvailable = false;
+            BSP_LED_On(LED_BLUE); // Signal the packet's start reading
+            rf24.read(inBuff, MAX_PAYLOAD_SIZE);
+            BSP_LED_Off(LED_BLUE); // Reading done
+            if(inBuff[0] == connectRequest) {
+                bConnectionRequested = true;
+                if(bConnectionAccepted) {
+                    txBuffer[0] = connectionAccepted;
+                    BSP_LED_On(LED_ORANGE);
+                    rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
+                    BSP_LED_Off(LED_ORANGE);
+                }
+//                else {
+//                    txBuffer[0] = connectRequest;
+//                    BSP_LED_On(LED_ORANGE);
+//                    rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
+//                    BSP_LED_Off(LED_ORANGE);
+//                }
+            }
+            if(inBuff[0] == connectionAck) {
+                bRemoteConnected = true;
+            }
+        }
+        BSP_LED_Off(LED_RED);
+    }
+
+/*
     while(!bRemoteConnected) {
         BSP_LED_On(LED_RED);
         if(bRadioDataAvailable) {
@@ -440,6 +472,7 @@ connectRemote() {
         }
         BSP_LED_Off(LED_RED);
     }
+*/
     BSP_LED_Off(LED_RED);
 }
 
