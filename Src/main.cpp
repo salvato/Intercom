@@ -7,6 +7,8 @@
 #include "ff.h"
 #include "ff_gen_drv.h"
 #include "usbh_diskio_dma.h"
+#include "waveplayer.h"
+
 
 
 
@@ -243,37 +245,6 @@ USBH_HandleTypeDef hUSB_Host; /* USB Host handle */
 
 
 static void USBH_UserProcess(USBH_HandleTypeDef *pHost, uint8_t vId);
-
-
-/**
-  * @brief Wave player.
-  * @param  None
-  * @retval None
-  */
-void
-WavePlayer_CallBack(void) {
-  if(AppliState != APPLICATION_IDLE)
-  {
-    /* Reset the Wave player variables */
-    RepeatState = REPEAT_ON;
-    AudioPlayStart = 0;
-    LEDsState = LEDS_OFF;
-    PauseResumeStatus = RESUME_STATUS;
-    WaveDataLength =0;
-    PressCount = 0;
-
-    /* Stop the Codec */
-    if(BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW) != AUDIO_OK)
-    {
-      Error_Handler();
-    }
-
-    /* Turn OFF LED3, LED4 and LED6 */
-    BSP_LED_Off(LED3);
-    BSP_LED_Off(LED4);
-    BSP_LED_Off(LED6);
-  }
-}
 
 
 /**

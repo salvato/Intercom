@@ -132,6 +132,7 @@ Inc/stm32f4xx_hal_tim.h
 Inc/stm32f4xx_hal_tim_ex.h
 Inc/stm32f4xx_it.h
 Inc/system_stm32f4xx.h
+Inc/waveplayer.h
 LICENSE
 Makefile
 STM32F407VGTx_FLASH.ld
@@ -197,6 +198,7 @@ Src/stm32f4xx_it.c
 Src/system_stm32f4xx.c
 Src/usbh_conf.c
 Src/usbh_diskio_dma.c
+Src/waveplayer.c
 libPDMFilter_CM4_GCC_wc32.a
 readme.txt
 startup_stm32f407xx.s
