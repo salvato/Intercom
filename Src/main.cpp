@@ -335,15 +335,6 @@ OTG_FS_IRQHandler(void) {
 }
 
 
-
-
-void
-playSound() {
-}
-
-
-
-
 int
 main(void) {
     const uint8_t Channel = 76;
@@ -405,39 +396,47 @@ connectRemote() {
         if(bRadioDataAvailable) {
             rf24.available(&pipe_num);
             bRadioDataAvailable = false;
-            BSP_LED_Toggle(LED_BLUE); // Signal the packet's start reading
+            BSP_LED_On(LED_BLUE); // Signal the packet's start reading
             rf24.read(inBuff, MAX_PAYLOAD_SIZE);
+            BSP_LED_Off(LED_BLUE);
             if(inBuff[0] == connectRequest) {
                 bConnectionRequested = true;
-                buffer_offset = BUFFER_OFFSET_NONE;
-                // Link the USB Host disk I/O
-                if(FATFS_LinkDriver(&USBH_Driver, USBDISKPath) == 0) {
-                    USBH_Init(&hUSB_Host, USBH_UserProcess, 0);// Init Host Library
-                    USBH_RegisterClass(&hUSB_Host, USBH_MSC_CLASS);// Add Supported Class
-                    USBH_Start(&hUSB_Host);// Start Host Process
-                }
+                // Non Funge !!!
+//                buffer_offset = BUFFER_OFFSET_NONE;
+//                // Link the USB Host disk I/O
+//                if(FATFS_LinkDriver(&USBH_Driver, USBDISKPath) == 0) {
+//                    USBH_Init(&hUSB_Host, USBH_UserProcess, 0);// Init Host Library
+//                    USBH_RegisterClass(&hUSB_Host, USBH_MSC_CLASS);// Add Supported Class
+//                    USBH_Start(&hUSB_Host);// Start Host Process
+//                }
                 while(!bConnectionAccepted) {
-                    switch(AppliState) {
-                        case APPLICATION_START:
-                            MSC_Application();
-                            break;
-                        case APPLICATION_IDLE:
-                        default:
-                            break;
+//                    switch(AppliState) {
+//                        case APPLICATION_START:
+//                            MSC_Application();
+//                            break;
+//                        case APPLICATION_IDLE:
+//                        default:
+//                            break;
+//                    }
+//                    USBH_Process(&hUSB_Host); // USBH_Background Process
+                    if(bRadioDataAvailable) {
+                        rf24.available(&pipe_num);
+                        rf24.read(inBuff, MAX_PAYLOAD_SIZE);
+                        bRadioDataAvailable = false;
                     }
-                    USBH_Process(&hUSB_Host); // USBH_Background Process
                 }
+//                while(!bRadioDataAvailable){}
                 txBuffer[0] = connectionAccepted;
                 BSP_LED_On(LED_ORANGE);
                 rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
                 BSP_LED_Off(LED_ORANGE);
-                WavePlayerStop();
+//                WavePlayerStop();
             } // if(bRadioDataAvailable)
-            while(!bRadioDataAvailable){}
-            rf24.read(inBuff, MAX_PAYLOAD_SIZE);
-            if(inBuff[0] == connectionAck) {
+//            while(!bRadioDataAvailable){}
+//            rf24.read(inBuff, MAX_PAYLOAD_SIZE);
+//            if(inBuff[0] == connectionAck) {
                 bRemoteConnected = true;
-            }
+//            }
         }
         BSP_LED_Off(LED_RED);
     }
