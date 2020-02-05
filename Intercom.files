@@ -47,6 +47,7 @@ HAL/Inc/stm32f4xx_hal_flash_ex.h
 HAL/Inc/stm32f4xx_hal_flash_ramfunc.h
 HAL/Inc/stm32f4xx_hal_gpio.h
 HAL/Inc/stm32f4xx_hal_gpio_ex.h
+HAL/Inc/stm32f4xx_hal_hcd.h
 HAL/Inc/stm32f4xx_hal_i2c.h
 HAL/Inc/stm32f4xx_hal_i2c_ex.h
 HAL/Inc/stm32f4xx_hal_i2s.h
@@ -58,11 +59,13 @@ HAL/Inc/stm32f4xx_hal_rcc_ex.h
 HAL/Inc/stm32f4xx_hal_spi.h
 HAL/Inc/stm32f4xx_hal_tim.h
 HAL/Inc/stm32f4xx_hal_tim_ex.h
+HAL/Inc/stm32f4xx_ll_usb.h
 HAL/Src/stm32f4xx_hal.c
 HAL/Src/stm32f4xx_hal_adc.c
 HAL/Src/stm32f4xx_hal_cortex.c
 HAL/Src/stm32f4xx_hal_dma.c
 HAL/Src/stm32f4xx_hal_gpio.c
+HAL/Src/stm32f4xx_hal_hcd.c
 HAL/Src/stm32f4xx_hal_i2c.c
 HAL/Src/stm32f4xx_hal_i2s.c
 HAL/Src/stm32f4xx_hal_i2s_ex.c
@@ -71,6 +74,7 @@ HAL/Src/stm32f4xx_hal_rcc_ex.c
 HAL/Src/stm32f4xx_hal_spi.c
 HAL/Src/stm32f4xx_hal_tim.c
 HAL/Src/stm32f4xx_hal_tim_ex.c
+HAL/Src/stm32f4xx_ll_usb.c
 HAL/stm32f4xx_hal.c
 HAL/stm32f4xx_hal_adc.c
 HAL/stm32f4xx_hal_cortex.c
@@ -163,14 +167,12 @@ STM32_USB_Host_Library/Class/MTP/Src/usbh_mtp.c
 STM32_USB_Host_Library/Class/MTP/Src/usbh_mtp_ptp.c
 STM32_USB_Host_Library/Class/Template/Inc/usbh_template.h
 STM32_USB_Host_Library/Class/Template/Src/usbh_template.c
-STM32_USB_Host_Library/Core/Inc/usbh_conf_template.h
 STM32_USB_Host_Library/Core/Inc/usbh_core.h
 STM32_USB_Host_Library/Core/Inc/usbh_core.h
 STM32_USB_Host_Library/Core/Inc/usbh_ctlreq.h
 STM32_USB_Host_Library/Core/Inc/usbh_def.h
 STM32_USB_Host_Library/Core/Inc/usbh_ioreq.h
 STM32_USB_Host_Library/Core/Inc/usbh_pipes.h
-STM32_USB_Host_Library/Core/Src/usbh_conf_template.c
 STM32_USB_Host_Library/Core/Src/usbh_core.c
 STM32_USB_Host_Library/Core/Src/usbh_ctlreq.c
 STM32_USB_Host_Library/Core/Src/usbh_ioreq.c

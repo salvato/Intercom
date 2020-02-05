@@ -842,13 +842,7 @@ HAL_ADC_ErrorCallback(ADC_HandleTypeDef *hadc) {
     Error_Handler();
 }
 
-
-void
-BSP_AUDIO_OUT_HalfTransfer_CallBack(void) {
-    //    BSP_LED_Toggle(LED_GREEN);
-}
-
-
+/*
 void
 BSP_AUDIO_OUT_TransferComplete_CallBack(void) {
     // Transfer last received chunk
@@ -859,7 +853,7 @@ BSP_AUDIO_OUT_TransferComplete_CallBack(void) {
     offset = chunk*MAX_PAYLOAD_SIZE*2;
     memset(&Audio_Out_Buffer[offset], 0, 2*MAX_PAYLOAD_SIZE*sizeof(*Audio_Out_Buffer));
 }
-
+*/
 
 void
 BSP_AUDIO_IN_TransferComplete_CallBack(void) {

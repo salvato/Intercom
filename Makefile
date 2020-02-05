@@ -32,6 +32,8 @@ Src/lis302dl.c \
 Src/lis3dsh.c \
 Src/stm32f4_discovery_audio.c \
 Src/waveplayer.c \
+Src/usbh_conf.c \
+Src/usbh_diskio_dma.c \
 HAL/Src/stm32f4xx_hal_gpio.c \
 HAL/Src/stm32f4xx_hal.c \
 HAL/Src/stm32f4xx_hal_spi.c \
@@ -45,11 +47,18 @@ HAL/Src/stm32f4xx_hal_adc.c \
 HAL/Src/stm32f4xx_hal_i2s.c \
 HAL/Src/stm32f4xx_hal_i2s_ex.c \
 HAL/Src/stm32f4xx_hal_i2c.c \
+HAL/Src/stm32f4xx_hal_hcd.c \
+HAL/Src/stm32f4xx_ll_usb.c \
 FatFs/src/ff.c \
 FatFs/src/diskio.c \
 FatFs/src/ff_gen_drv.c \
 STM32_USB_Host_Library/Core/Src/usbh_core.c \
-STM32_USB_Host_Library/Core/Src/usbh_conf_template.c \
+STM32_USB_Host_Library/Class/MSC/Src/usbh_msc.c \
+STM32_USB_Host_Library/Class/MSC/Src/usbh_msc_scsi.c \
+STM32_USB_Host_Library/Class/MSC/Src/usbh_msc_bot.c \
+STM32_USB_Host_Library/Core/Src/usbh_ctlreq.c \
+STM32_USB_Host_Library/Core/Src/usbh_pipes.c \
+STM32_USB_Host_Library/Core/Src/usbh_ioreq.c \
 
 # C++ sources
 CXX_SOURCES =  \
