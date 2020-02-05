@@ -311,23 +311,16 @@ void
 MSC_Application(void) {
     switch(USBH_USR_ApplicationState) {
         case USBH_USR_AUDIO:
-            /* Go to Audio menu */
-            COMMAND_AudioExecuteApplication();
-
-            /* Set user initialization flag */
-            USBH_USR_ApplicationState = USBH_USR_FS_INIT;
+            COMMAND_AudioExecuteApplication(); // Go to Audio menu
+            USBH_USR_ApplicationState = USBH_USR_FS_INIT; // Set user initialization flag
             break;
 
         case USBH_USR_FS_INIT:
-            /* Initializes the File System */
-            if(f_mount(&USBDISKFatFs, (TCHAR const*)USBDISKPath, 0 ) != FR_OK )
-            {
-                /* FatFs initialisation fails */
+            // Initializes the File System
+            if(f_mount(&USBDISKFatFs, (TCHAR const*)USBDISKPath, 0 ) != FR_OK ) {
                 Error_Handler();
             }
-
-            /* Go to menu */
-            USBH_USR_ApplicationState = USBH_USR_AUDIO;
+            USBH_USR_ApplicationState = USBH_USR_AUDIO; // Go to menu
             break;
 
         default:
@@ -346,28 +339,6 @@ OTG_FS_IRQHandler(void) {
 
 void
 playSound() {
-    buffer_offset = BUFFER_OFFSET_NONE;
-    // Link the USB Host disk I/O
-    if(FATFS_LinkDriver(&USBH_Driver, USBDISKPath) == 0)     {
-        // Init Host Library
-        USBH_Init(&hUSB_Host, USBH_UserProcess, 0);
-        // Add Supported Class
-        USBH_RegisterClass(&hUSB_Host, USBH_MSC_CLASS);
-        // Start Host Process
-        USBH_Start(&hUSB_Host);
-    }
-    while (1) {
-        switch(AppliState) {
-            case APPLICATION_START:
-                MSC_Application();
-                break;
-            case APPLICATION_IDLE:
-            default:
-                break;
-        }
-        /* USBH_Background Process */
-        USBH_Process(&hUSB_Host);
-    }
 }
 
 
@@ -434,20 +405,36 @@ connectRemote() {
         if(bRadioDataAvailable) {
             rf24.available(&pipe_num);
             bRadioDataAvailable = false;
-            BSP_LED_On(LED_BLUE); // Signal the packet's start reading
+            BSP_LED_Toggle(LED_BLUE); // Signal the packet's start reading
             rf24.read(inBuff, MAX_PAYLOAD_SIZE);
-            BSP_LED_Off(LED_BLUE); // Reading done
             if(inBuff[0] == connectRequest) {
                 bConnectionRequested = true;
-                playSound();
-                if(bConnectionAccepted) {
-                    WavePlayerStop();
-                    txBuffer[0] = connectionAccepted;
-                    BSP_LED_On(LED_ORANGE);
-                    rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
-                    BSP_LED_Off(LED_ORANGE);
+                buffer_offset = BUFFER_OFFSET_NONE;
+                // Link the USB Host disk I/O
+                if(FATFS_LinkDriver(&USBH_Driver, USBDISKPath) == 0) {
+                    USBH_Init(&hUSB_Host, USBH_UserProcess, 0);// Init Host Library
+                    USBH_RegisterClass(&hUSB_Host, USBH_MSC_CLASS);// Add Supported Class
+                    USBH_Start(&hUSB_Host);// Start Host Process
                 }
-            }
+                while(!bConnectionAccepted) {
+                    switch(AppliState) {
+                        case APPLICATION_START:
+                            MSC_Application();
+                            break;
+                        case APPLICATION_IDLE:
+                        default:
+                            break;
+                    }
+                    USBH_Process(&hUSB_Host); // USBH_Background Process
+                }
+                txBuffer[0] = connectionAccepted;
+                BSP_LED_On(LED_ORANGE);
+                rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
+                BSP_LED_Off(LED_ORANGE);
+                WavePlayerStop();
+            } // if(bRadioDataAvailable)
+            while(!bRadioDataAvailable){}
+            rf24.read(inBuff, MAX_PAYLOAD_SIZE);
             if(inBuff[0] == connectionAck) {
                 bRemoteConnected = true;
             }
@@ -856,16 +843,28 @@ HAL_ADC_ErrorCallback(ADC_HandleTypeDef *hadc) {
     Error_Handler();
 }
 
+
+void
+BSP_AUDIO_OUT_TransferComplete_CallBack(void) {
+    if(bConnectionAccepted) {
+        // Transfer last received chunk
+        offset = chunk*MAX_PAYLOAD_SIZE*2;
+        BSP_AUDIO_OUT_ChangeBuffer(&Audio_Out_Buffer[offset], 2*MAX_PAYLOAD_SIZE);
+        // Prepare for next chunk
+        chunk = 1-chunk;
+        offset = chunk*MAX_PAYLOAD_SIZE*2;
+        memset(&Audio_Out_Buffer[offset], 0, 2*MAX_PAYLOAD_SIZE*sizeof(*Audio_Out_Buffer));
+    }
+    else {
+        buffer_offset = BUFFER_OFFSET_FULL;
+        BSP_AUDIO_OUT_ChangeBuffer((uint16_t*)&Audio_Buffer[0], AUDIO_BUFFER_SIZE/2);
+    }
+}
+
+
 /*
 void
 BSP_AUDIO_OUT_TransferComplete_CallBack(void) {
-    // Transfer last received chunk
-    offset = chunk*MAX_PAYLOAD_SIZE*2;
-    BSP_AUDIO_OUT_ChangeBuffer(&Audio_Out_Buffer[offset], 2*MAX_PAYLOAD_SIZE);
-    // Prepare for next chunk
-    chunk = 1-chunk;
-    offset = chunk*MAX_PAYLOAD_SIZE*2;
-    memset(&Audio_Out_Buffer[offset], 0, 2*MAX_PAYLOAD_SIZE*sizeof(*Audio_Out_Buffer));
 }
 */
 
@@ -873,13 +872,6 @@ BSP_AUDIO_OUT_TransferComplete_CallBack(void) {
 void
 BSP_AUDIO_OUT_HalfTransfer_CallBack(void) {
     buffer_offset = BUFFER_OFFSET_HALF;
-}
-
-
-void
-BSP_AUDIO_OUT_TransferComplete_CallBack(void) {
-    buffer_offset = BUFFER_OFFSET_FULL;
-    BSP_AUDIO_OUT_ChangeBuffer((uint16_t*)&Audio_Buffer[0], AUDIO_BUFFER_SIZE / 2);
 }
 
 
@@ -957,6 +949,7 @@ EXTI0_IRQHandler(void) {
         if(bConnectionRequested) {
             bConnectionRequested = false;
             bConnectionAccepted = true;
+            CmdIndex = CMD_STOP; // Ask to stop the Alarm Sound
         }
         else {
             bSuspend = true;
