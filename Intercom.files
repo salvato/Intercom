@@ -136,6 +136,7 @@ Inc/stm32f4xx_hal_tim.h
 Inc/stm32f4xx_hal_tim_ex.h
 Inc/stm32f4xx_it.h
 Inc/system_stm32f4xx.h
+Inc/usbh_conf.h
 Inc/usbh_diskio_dma.h
 Inc/waveplayer.h
 LICENSE
