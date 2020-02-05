@@ -371,9 +371,9 @@ playSound() {
             default:
                 break;
         }
+        /* USBH_Background Process */
+        USBH_Process(&hUSB_Host);
     }
-    /* USBH_Background Process */
-    USBH_Process(&hUSB_Host);
 }
 
 
