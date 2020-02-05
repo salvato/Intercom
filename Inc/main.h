@@ -20,19 +20,18 @@
 #define CMD_RECORD         ((uint32_t)0x01)
 #define CMD_STOP           ((uint32_t)0x02)
 
-typedef enum
-{
+typedef enum {
   APPLICATION_IDLE = 0,
   APPLICATION_START,
   APPLICATION_RUNNING,
-}
-MSC_ApplicationTypeDef;
 
+} MSC_ApplicationTypeDef;
 
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
 void Error_Handler(void);
 void EXTI15_10_IRQHandler(void);
 void DMA2_Stream0_IRQHandler(void);
@@ -55,7 +54,6 @@ void OTG_FS_IRQHandler(void);
 void USBH_UserProcess(USBH_HandleTypeDef *pHost, uint8_t vId);
 void COMMAND_AudioExecuteApplication(void);
 void MSC_Application(void);
-
 
 void _delay_3t(uint32_t cycles);
 void delay_cycles(const int64_t cycles);

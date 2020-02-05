@@ -3,6 +3,7 @@
   * @file    Audio/Audio_playback_and_record/Inc/waveplayer.h
   * @author  MCD Application Team
   * @brief   Header for waveplayer.c module.
+  *                                                 Modified by G.S.
   ******************************************************************************
   * @attention
   *
@@ -43,22 +44,12 @@
   ******************************************************************************
   */   
   
-/* Define to prevent recursive inclusion -------------------------------------*/
 #pragma once
 
-/* Includes ------------------------------------------------------------------*/
 #include "main.h"
 
-/* Exported types ------------------------------------------------------------*/
-typedef enum
-{
-  BUFFER_OFFSET_NONE = 0,  
-  BUFFER_OFFSET_HALF,  
-  BUFFER_OFFSET_FULL,     
-}BUFFER_StateTypeDef;
 
-typedef struct
-{
+typedef struct {
   uint32_t   ChunkID;       /* 0 */ 
   uint32_t   FileSize;      /* 4 */
   uint32_t   FileFormat;    /* 8 */
@@ -74,11 +65,22 @@ typedef struct
   uint32_t   SubChunk2ID;   /* 36 */   
   uint32_t   SubChunk2Size; /* 40 */    
 
-}WAVE_FormatTypeDef;
+} WAVE_FormatTypeDef;
 
-/* Exported constants --------------------------------------------------------*/
-/* Exported macro ------------------------------------------------------------*/
-/* Exported functions ------------------------------------------------------- */
+
+#define AUDIO_BUFFER_SIZE             4096
+
+
+typedef enum {
+  BUFFER_OFFSET_NONE = 0,
+  BUFFER_OFFSET_HALF,
+  BUFFER_OFFSET_FULL,
+
+} BUFFER_StateTypeDef;
+
+
+__IO BUFFER_StateTypeDef buffer_offset;
+uint8_t* Audio_Buffer;
 
 #ifdef __cplusplus
 extern "C" {

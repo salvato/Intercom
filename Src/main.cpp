@@ -263,7 +263,7 @@ __IO uint32_t PressCount = 0;
 
 __IO uint32_t CmdIndex = CMD_PLAY;
 
-
+extern __IO BUFFER_StateTypeDef buffer_offset;
 
 void
 USBH_UserProcess (USBH_HandleTypeDef *pHost, uint8_t vId) {
@@ -336,12 +336,6 @@ MSC_Application(void) {
 }
 
 
-
-/**
-  * @brief  This function handles USB-On-The-Go FS global interrupt request.
-  * @param  None
-  * @retval None
-  */
 void
 OTG_FS_IRQHandler(void) {
   HAL_HCD_IRQHandler(&hhcd);
@@ -352,6 +346,7 @@ OTG_FS_IRQHandler(void) {
 
 void
 playSound() {
+    buffer_offset = BUFFER_OFFSET_NONE;
     // Link the USB Host disk I/O
     if(FATFS_LinkDriver(&USBH_Driver, USBDISKPath) == 0)     {
         // Init Host Library
@@ -361,7 +356,6 @@ playSound() {
         // Start Host Process
         USBH_Start(&hUSB_Host);
     }
-    /* Run Application (Blocking mode)*/
     while (1) {
         switch(AppliState) {
             case APPLICATION_START:
@@ -398,8 +392,6 @@ main(void) {
     if(!rf24.begin(Channel, RADIO_IN_IRQ_PREPRIO)) Error_Handler();
     rf24.clearInterrupts();// Avoid false interrupts from Radio
     rf24.maskIRQ(false, false, false);
-
-playSound();
 
     while(1) {
         //=====================
@@ -447,7 +439,9 @@ connectRemote() {
             BSP_LED_Off(LED_BLUE); // Reading done
             if(inBuff[0] == connectRequest) {
                 bConnectionRequested = true;
+                playSound();
                 if(bConnectionAccepted) {
+                    WavePlayerStop();
                     txBuffer[0] = connectionAccepted;
                     BSP_LED_On(LED_ORANGE);
                     rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
@@ -874,6 +868,35 @@ BSP_AUDIO_OUT_TransferComplete_CallBack(void) {
     memset(&Audio_Out_Buffer[offset], 0, 2*MAX_PAYLOAD_SIZE*sizeof(*Audio_Out_Buffer));
 }
 */
+
+
+void
+BSP_AUDIO_OUT_HalfTransfer_CallBack(void) {
+    buffer_offset = BUFFER_OFFSET_HALF;
+}
+
+
+void
+BSP_AUDIO_OUT_TransferComplete_CallBack(void) {
+    buffer_offset = BUFFER_OFFSET_FULL;
+    BSP_AUDIO_OUT_ChangeBuffer((uint16_t*)&Audio_Buffer[0], AUDIO_BUFFER_SIZE / 2);
+}
+
+
+/**
+* @brief  Manages the DMA FIFO error interrupt.
+* @param  None
+* @retval None
+*/
+void
+BSP_AUDIO_OUT_Error_CallBack(void) {
+    /* Stop the program with an infinite loop */
+    while (1)
+    {}
+    /* Could also generate a system reset to recover from the error */
+    /* .... */
+}
+
 
 void
 BSP_AUDIO_IN_TransferComplete_CallBack(void) {
