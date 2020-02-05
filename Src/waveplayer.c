@@ -1,50 +1,53 @@
 /**
   ******************************************************************************
-  * @file    Audio/Audio_playback_and_record/Src/waveplayer.c 
+  * @file    Audio/Audio_playback_and_record/Src/waveplayer.c
   * @author  MCD Application Team
-  * @brief   I2S Audio player program. 
+  * @brief   I2S Audio player program.
+  * Modified by G.S
   ******************************************************************************
   * @attention
   *
-  * <h2><center>&copy; Copyright (c) 2017 STMicroelectronics International N.V. 
+  * <h2><center>&copy; Copyright (c) 2017 STMicroelectronics International N.V.
   * All rights reserved.</center></h2>
   *
-  * Redistribution and use in source and binary forms, with or without 
+  * Redistribution and use in source and binary forms, with or without
   * modification, are permitted, provided that the following conditions are met:
   *
-  * 1. Redistribution of source code must retain the above copyright notice, 
+  * 1. Redistribution of source code must retain the above copyright notice,
   *    this list of conditions and the following disclaimer.
   * 2. Redistributions in binary form must reproduce the above copyright notice,
   *    this list of conditions and the following disclaimer in the documentation
   *    and/or other materials provided with the distribution.
-  * 3. Neither the name of STMicroelectronics nor the names of other 
-  *    contributors to this software may be used to endorse or promote products 
+  * 3. Neither the name of STMicroelectronics nor the names of other
+  *    contributors to this software may be used to endorse or promote products
   *    derived from this software without specific written permission.
-  * 4. This software, including modifications and/or derivative works of this 
+  * 4. This software, including modifications and/or derivative works of this
   *    software, must execute solely and exclusively on microcontroller or
   *    microprocessor devices manufactured by or for STMicroelectronics.
-  * 5. Redistribution and use of this software other than as permitted under 
-  *    this license is void and will automatically terminate your rights under 
-  *    this license. 
+  * 5. Redistribution and use of this software other than as permitted under
+  *    this license is void and will automatically terminate your rights under
+  *    this license.
   *
-  * THIS SOFTWARE IS PROVIDED BY STMICROELECTRONICS AND CONTRIBUTORS "AS IS" 
-  * AND ANY EXPRESS, IMPLIED OR STATUTORY WARRANTIES, INCLUDING, BUT NOT 
-  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A 
+  * THIS SOFTWARE IS PROVIDED BY STMICROELECTRONICS AND CONTRIBUTORS "AS IS"
+  * AND ANY EXPRESS, IMPLIED OR STATUTORY WARRANTIES, INCLUDING, BUT NOT
+  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
   * PARTICULAR PURPOSE AND NON-INFRINGEMENT OF THIRD PARTY INTELLECTUAL PROPERTY
-  * RIGHTS ARE DISCLAIMED TO THE FULLEST EXTENT PERMITTED BY LAW. IN NO EVENT 
+  * RIGHTS ARE DISCLAIMED TO THE FULLEST EXTENT PERMITTED BY LAW. IN NO EVENT
   * SHALL STMICROELECTRONICS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
   * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-  * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, 
-  * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
-  * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING 
+  * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
+  * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+  * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
   * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
   * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   *
   ******************************************************************************
-  */ 
+  */
 
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "ff.h"
+#include "waveplayer.h"
 
 /** @addtogroup STM32F4-Discovery_Audio_Player_Recorder
 * @{
@@ -57,9 +60,6 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
-
-/* LED State (Toggle or OFF)*/
-__IO uint32_t LEDsState;
 
 extern __IO uint32_t RepeatState, PauseResumeStatus, PressCount;
 
@@ -107,158 +107,127 @@ extern MSC_ApplicationTypeDef AppliState;
   * @param  AudioFreq: Audio Sampling Frequency
   * @retval None
 */
-void WavePlayBack(uint32_t AudioFreq)
-{ 
-  UINT bytesread = 0;
-  
-  /* Start playing */
-  AudioPlayStart = 1;
-  RepeatState = REPEAT_ON;
-  
-  /* Initialize Wave player (Codec, DMA, I2C) */
-  if(WavePlayerInit(AudioFreq) != 0)
-  {
-    Error_Handler();
-  }
+void
+WavePlayBack(uint32_t AudioFreq) {
+    UINT bytesread = 0;
 
-  /* Get Data from USB Flash Disk */
-  f_lseek(&FileRead, 0);
-  f_read (&FileRead, &Audio_Buffer[0], AUDIO_BUFFER_SIZE, &bytesread);
-  AudioRemSize = WaveDataLength - bytesread;
-  
-  /* Start playing Wave */
-  BSP_AUDIO_OUT_Play((uint16_t*)&Audio_Buffer[0], AUDIO_BUFFER_SIZE);
-  LEDsState = LED6_TOGGLE;
-  PauseResumeStatus = RESUME_STATUS;
-  PressCount = 0;
- 
-  /* Check if the device is connected.*/
-  while((AudioRemSize != 0) && (AppliState != APPLICATION_IDLE))
-  { 
-    /* Test on the command: Playing */
-    if(CmdIndex == CMD_PLAY)
-    { 
-      if(PauseResumeStatus == PAUSE_STATUS)
-      {
-        /* Stop Toggling LED2 to signal Pause */
-        LEDsState = STOP_TOGGLE;
-        /* Pause playing Wave */
-        WavePlayerPauseResume(PauseResumeStatus);
-        PauseResumeStatus = IDLE_STATUS;
-      }
-      else if(PauseResumeStatus == RESUME_STATUS)
-      {
-        /* Toggling LED6 to signal Play */
-        LEDsState = LED6_TOGGLE;
-        /* Resume playing Wave */
-        WavePlayerPauseResume(PauseResumeStatus);
-        PauseResumeStatus = IDLE_STATUS;
-      }  
+    /* Start playing */
+    AudioPlayStart = 1;
+    RepeatState = REPEAT_ON;
 
-      bytesread = 0;
-      
-      if(buffer_offset == BUFFER_OFFSET_HALF)
-      {
-        
-        f_read(&FileRead, 
-               &Audio_Buffer[0], 
-               AUDIO_BUFFER_SIZE/2, 
-               (void *)&bytesread); 
-          
-          buffer_offset = BUFFER_OFFSET_NONE;
-      }
-      
-      if(buffer_offset == BUFFER_OFFSET_FULL)
-      {
-        f_read(&FileRead, 
-               &Audio_Buffer[AUDIO_BUFFER_SIZE/2], 
-               AUDIO_BUFFER_SIZE/2, 
-               (void *)&bytesread); 
-          
-          buffer_offset = BUFFER_OFFSET_NONE;
-      } 
-      if(AudioRemSize > (AUDIO_BUFFER_SIZE / 2))
-      {
-        AudioRemSize -= bytesread;
-      }
-      else
-      {
-        AudioRemSize = 0;
-      }
+    /* Initialize Wave player (Codec, DMA, I2C) */
+    if(WavePlayerInit(AudioFreq) != 0) {
+        Error_Handler();
     }
-    else 
-    {
-      /* Stop playing Wave */
-      WavePlayerStop();
-      /* Close file */
-      f_close(&FileRead);
-      AudioRemSize = 0;
-      RepeatState = REPEAT_ON;
-      break;
+
+    /* Get Data from USB Flash Disk */
+    f_lseek(&FileRead, 0);
+    f_read (&FileRead, &Audio_Buffer[0], AUDIO_BUFFER_SIZE, &bytesread);
+    AudioRemSize = WaveDataLength - bytesread;
+
+    /* Start playing Wave */
+    BSP_AUDIO_OUT_Play((uint16_t*)&Audio_Buffer[0], AUDIO_BUFFER_SIZE);
+    PauseResumeStatus = RESUME_STATUS;
+    PressCount = 0;
+
+    /* Check if the device is connected.*/
+    while((AudioRemSize != 0) && (AppliState != APPLICATION_IDLE)) {
+        /* Test on the command: Playing */
+        if(CmdIndex == CMD_PLAY) {
+            if(PauseResumeStatus == PAUSE_STATUS) {
+                /* Pause playing Wave */
+                WavePlayerPauseResume(PauseResumeStatus);
+                PauseResumeStatus = IDLE_STATUS;
+            }
+            else if(PauseResumeStatus == RESUME_STATUS) {
+                /* Resume playing Wave */
+                WavePlayerPauseResume(PauseResumeStatus);
+                PauseResumeStatus = IDLE_STATUS;
+            }
+
+            bytesread = 0;
+
+            if(buffer_offset == BUFFER_OFFSET_HALF) {
+                f_read(&FileRead,
+                       &Audio_Buffer[0],
+                        AUDIO_BUFFER_SIZE/2,
+                        (void *)&bytesread);
+                buffer_offset = BUFFER_OFFSET_NONE;
+            }
+
+            if(buffer_offset == BUFFER_OFFSET_FULL) {
+                f_read(&FileRead,
+                       &Audio_Buffer[AUDIO_BUFFER_SIZE/2],
+                        AUDIO_BUFFER_SIZE/2,
+                        (void *)&bytesread);
+
+                buffer_offset = BUFFER_OFFSET_NONE;
+            }
+
+            if(AudioRemSize > (AUDIO_BUFFER_SIZE / 2)) {
+                AudioRemSize -= bytesread;
+            }
+            else {
+                AudioRemSize = 0;
+            }
+        }
+        else {
+            /* Stop playing Wave */
+            WavePlayerStop();
+            /* Close file */
+            f_close(&FileRead);
+            AudioRemSize = 0;
+            RepeatState = REPEAT_ON;
+            break;
+        }
     }
-  }
-#ifdef PLAY_REPEAT_DISABLED 
-  RepeatState = REPEAT_OFF;
-  /* Stop playing Wave */
-  WavePlayerStop();
-  /* Close file */
-  f_close(&FileRead);
-  /* Test on the command: Playing */
-  if(CmdIndex == CMD_PLAY)
-  {
-    LEDsState = LED4_TOGGLE;
-  }
-#else 
-  LEDsState = LEDS_OFF;
-  RepeatState = REPEAT_ON;
-  AudioPlayStart = 0;
-  /* Stop playing Wave */
-  WavePlayerStop();
-  /* Close file */
-  f_close(&FileRead);
-#endif /* PLAY_REPEAT_DISABLED */
+    RepeatState = REPEAT_ON;
+    AudioPlayStart = 0;
+    /* Stop playing Wave */
+    WavePlayerStop();
+    /* Close file */
+    f_close(&FileRead);
 }
+
 
 /**
   * @brief  Pauses or Resumes a played Wave.
   * @param  state: Player state: Pause, Resume or Idle
   * @retval None
   */
-void WavePlayerPauseResume(uint32_t wState)
-{
-  if(wState == PAUSE_STATUS)
-  {
-    BSP_AUDIO_OUT_Pause();   
-  }
-  else
-  {
-    BSP_AUDIO_OUT_Resume();   
-  }
+void
+WavePlayerPauseResume(uint32_t wState) {
+    if(wState == PAUSE_STATUS) {
+        BSP_AUDIO_OUT_Pause();
+    }
+    else {
+        BSP_AUDIO_OUT_Resume();
+    }
 }
+
 
 /**
   * @brief  Stops playing Wave.
   * @param  None
   * @retval None
   */
-void WavePlayerStop(void)
-{ 
-  BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW);
+void
+WavePlayerStop(void) {
+    BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW);
 }
- 
+
+
 /**
 * @brief  Initializes the Wave player.
 * @param  AudioFreq: Audio sampling frequency
 * @retval None
 */
-int WavePlayerInit(uint32_t AudioFreq)
-{ 
-  /* MEMS Accelerometer configure to manage PAUSE, RESUME operations */
-  BSP_ACCELERO_Click_ITConfig();
-
-  /* Initialize the Audio codec and all related peripherals (I2S, I2C, IOExpander, IOs...) */  
-  return(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, AudioFreq));  
+int
+WavePlayerInit(uint32_t AudioFreq) {
+    /* Initialize the Audio codec and all related peripherals (I2S, I2C, IOExpander, IOs...) */
+    return(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, AudioFreq));
 }
+
 
 /*--------------------------------
 Callbacks implementation:
@@ -272,112 +241,100 @@ Below some examples of callback implementations.
   * @param  None
   * @retval None
   */
-void BSP_AUDIO_OUT_HalfTransfer_CallBack(void)
-{ 
-  buffer_offset = BUFFER_OFFSET_HALF;
+void
+BSP_AUDIO_OUT_HalfTransfer_CallBack(void) {
+    buffer_offset = BUFFER_OFFSET_HALF;
 }
+
 
 /**
 * @brief  Calculates the remaining file size and new position of the pointer.
 * @param  None
 * @retval None
 */
-void BSP_AUDIO_OUT_TransferComplete_CallBack(void)
-{
-  buffer_offset = BUFFER_OFFSET_FULL;
-  BSP_AUDIO_OUT_ChangeBuffer((uint16_t*)&Audio_Buffer[0], AUDIO_BUFFER_SIZE / 2);
+void
+BSP_AUDIO_OUT_TransferComplete_CallBack(void) {
+    buffer_offset = BUFFER_OFFSET_FULL;
+    BSP_AUDIO_OUT_ChangeBuffer((uint16_t*)&Audio_Buffer[0], AUDIO_BUFFER_SIZE / 2);
 }
+
 
 /**
 * @brief  Manages the DMA FIFO error interrupt.
 * @param  None
 * @retval None
 */
-void BSP_AUDIO_OUT_Error_CallBack(void)
-{
-  /* Stop the program with an infinite loop */
-  while (1)
-  {}
-  
-  /* Could also generate a system reset to recover from the error */
-  /* .... */
+void
+BSP_AUDIO_OUT_Error_CallBack(void) {
+    /* Stop the program with an infinite loop */
+    while (1)
+    {}
+    /* Could also generate a system reset to recover from the error */
+    /* .... */
 }
+
 
 /**
   * @brief  Starts Wave player.
   * @param  None
   * @retval None
   */
-void WavePlayerStart(void)
-{
-  UINT bytesread = 0;
-  char path[] = "0:/";
-  char* wavefilename = NULL;
-  WAVE_FormatTypeDef waveformat;
-  
-  /* Get the read out protection status */
-  if(f_opendir(&Directory, path) == FR_OK)
-  {
-    if(WaveRecStatus == 1)
-    {
-      wavefilename = REC_WAVE_NAME;
-    }
-    else
-    {
-      wavefilename = WAVE_NAME; 
-    }
-    /* Open the Wave file to be played */
-    if(f_open(&FileRead, wavefilename , FA_READ) != FR_OK)
-    {
-      BSP_LED_On(LED5);
-      CmdIndex = CMD_RECORD;
-    }
-    else
-    {    
-      /* Read sizeof(WaveFormat) from the selected file */
-      f_read (&FileRead, &waveformat, sizeof(waveformat), &bytesread);
-      
-      /* Set WaveDataLenght to the Speech Wave length */
-      WaveDataLength = waveformat.FileSize;
+void
+WavePlayerStart(void) {
+    UINT bytesread = 0;
+    char path[] = "0:/";
+    char* wavefilename = NULL;
+    WAVE_FormatTypeDef waveformat;
 
-      /* Play the Wave */
-      WavePlayBack(waveformat.SampleRate);
-    }    
-  }
+    /* Get the read out protection status */
+    if(f_opendir(&Directory, path) == FR_OK) {
+            wavefilename = WAVE_NAME;
+        /* Open the Wave file to be played */
+        if(f_open(&FileRead, wavefilename , FA_READ) != FR_OK) {
+            BSP_LED_On(LED5);
+            Error_Handler();
+        }
+        else {
+            /* Read sizeof(WaveFormat) from the selected file */
+            f_read (&FileRead, &waveformat, sizeof(waveformat), &bytesread);
+            /* Set WaveDataLenght to the Speech Wave length */
+            WaveDataLength = waveformat.FileSize;
+            /* Play the Wave */
+            WavePlayBack(waveformat.SampleRate);
+        }
+    }
 }
+
 
 /**
   * @brief Wave player.
   * @param  None
   * @retval None
   */
-void WavePlayer_CallBack(void)
-{
-  if(AppliState != APPLICATION_IDLE)
-  {
-    /* Reset the Wave player variables */
-    RepeatState = REPEAT_ON;
-    AudioPlayStart = 0;
-    LEDsState = LEDS_OFF;
-    PauseResumeStatus = RESUME_STATUS;
-    WaveDataLength =0;
-    PressCount = 0;
-    
-    /* Stop the Codec */
-    if(BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW) != AUDIO_OK)
-    {
-      Error_Handler();
+void
+WavePlayer_CallBack(void) {
+    if(AppliState != APPLICATION_IDLE) {
+        /* Reset the Wave player variables */
+        RepeatState = REPEAT_ON;
+        AudioPlayStart = 0;
+        PauseResumeStatus = RESUME_STATUS;
+        WaveDataLength =0;
+        PressCount = 0;
+
+        /* Stop the Codec */
+        if(BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW) != AUDIO_OK) {
+            Error_Handler();
+        }
+
+        /* Turn OFF LED3, LED4 and LED6 */
+        BSP_LED_Off(LED3);
+        BSP_LED_Off(LED4);
+        BSP_LED_Off(LED6);
     }
-    
-    /* Turn OFF LED3, LED4 and LED6 */
-    BSP_LED_Off(LED3);
-    BSP_LED_Off(LED4);
-    BSP_LED_Off(LED6);
-  }
 } 
 
 /**
   * @}
-  */ 
+  */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

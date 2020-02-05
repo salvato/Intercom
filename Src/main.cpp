@@ -238,10 +238,22 @@ uint8_t suspendAck         = 0x14;
 
 
 
-#define WAVE_NAME "0:audio_sample.wav"
+
+/* State Machine for the USBH_USR_ApplicationState */
+#define USBH_USR_FS_INIT    ((uint8_t)0x00)
+#define USBH_USR_AUDIO      ((uint8_t)0x01)
+
 FATFS USBDISKFatFs;          /* File system object for USB disk logical drive */
 char USBDISKPath[4];         /* USB Host logical drive path */
 USBH_HandleTypeDef hUSB_Host; /* USB Host handle */
+MSC_ApplicationTypeDef AppliState = APPLICATION_IDLE;
+static uint8_t  USBH_USR_ApplicationState = USBH_USR_FS_INIT;
+
+/* Re-play Wave file status on/off.
+   Defined as external in waveplayer.c file */
+__IO uint32_t RepeatState = REPEAT_ON;
+
+__IO uint32_t CmdIndex = CMD_PLAY;
 
 
 static void USBH_UserProcess(USBH_HandleTypeDef *pHost, uint8_t vId);
@@ -273,6 +285,51 @@ USBH_UserProcess (USBH_HandleTypeDef *pHost, uint8_t vId) {
 }
 
 
+
+static void
+COMMAND_AudioExecuteApplication(void) {
+    /* Execute the command switch the command index */
+    switch (CmdIndex) {
+        /* Start Playing from USB Flash memory */
+        case CMD_PLAY:
+            if (RepeatState == REPEAT_ON)
+                WavePlayerStart();
+            break;
+        default:
+            break;
+    }
+}
+
+
+static void
+MSC_Application(void) {
+    switch(USBH_USR_ApplicationState) {
+        case USBH_USR_AUDIO:
+            /* Go to Audio menu */
+            COMMAND_AudioExecuteApplication();
+
+            /* Set user initialization flag */
+            USBH_USR_ApplicationState = USBH_USR_FS_INIT;
+            break;
+
+        case USBH_USR_FS_INIT:
+            /* Initializes the File System */
+            if(f_mount(&USBDISKFatFs, (TCHAR const*)USBDISKPath, 0 ) != FR_OK )
+            {
+                /* FatFs initialisation fails */
+                Error_Handler();
+            }
+
+            /* Go to menu */
+            USBH_USR_ApplicationState = USBH_USR_AUDIO;
+            break;
+
+        default:
+            break;
+    }
+}
+
+
 void
 playSound() {
     // Link the USB Host disk I/O
@@ -284,8 +341,20 @@ playSound() {
         // Start Host Process
         USBH_Start(&hUSB_Host);
     }
+    /* Run Application (Blocking mode)*/
+    while (1) {
+        switch(AppliState) {
+            case APPLICATION_START:
+                MSC_Application();
+                break;
+            case APPLICATION_IDLE:
+            default:
+                break;
+        }
+    }
+    /* USBH_Background Process */
+    USBH_Process(&hUSB_Host);
 }
-
 
 
 
@@ -309,6 +378,8 @@ main(void) {
     if(!rf24.begin(Channel, RADIO_IN_IRQ_PREPRIO)) Error_Handler();
     rf24.clearInterrupts();// Avoid false interrupts from Radio
     rf24.maskIRQ(false, false, false);
+
+playSound();
 
     while(1) {
         //=====================

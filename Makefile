@@ -31,6 +31,7 @@ Src/cs43l22.c \
 Src/lis302dl.c \
 Src/lis3dsh.c \
 Src/stm32f4_discovery_audio.c \
+Src/waveplayer.c \
 HAL/Src/stm32f4xx_hal_gpio.c \
 HAL/Src/stm32f4xx_hal.c \
 HAL/Src/stm32f4xx_hal_spi.c \
@@ -44,6 +45,11 @@ HAL/Src/stm32f4xx_hal_adc.c \
 HAL/Src/stm32f4xx_hal_i2s.c \
 HAL/Src/stm32f4xx_hal_i2s_ex.c \
 HAL/Src/stm32f4xx_hal_i2c.c \
+FatFs/src/ff.c \
+FatFs/src/diskio.c \
+FatFs/src/ff_gen_drv.c \
+STM32_USB_Host_Library/Core/Src/usbh_core.c \
+STM32_USB_Host_Library/Core/Src/usbh_conf_template.c \
 
 # C++ sources
 CXX_SOURCES =  \

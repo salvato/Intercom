@@ -4,6 +4,31 @@
 #include "stm32f4_discovery.h"
 #include "stm32f4_discovery_audio.h"
 
+#define WAVE_NAME "0:audio_sample.wav"
+
+#define REPEAT_ON        ((uint32_t)0x00) /* Replay Status in ON */
+#define REPEAT_OFF       ((uint32_t)0x01) /* Replay Status in OFF */
+
+/* Defines for the Audio playing process */
+#define PAUSE_STATUS     ((uint32_t)0x00) /* Audio Player in Pause Status */
+#define RESUME_STATUS    ((uint32_t)0x01) /* Audio Player in Resume Status */
+#define IDLE_STATUS      ((uint32_t)0x02) /* Audio Player in Idle Status */
+
+/* Defines for the Audio used commands */
+#define CMD_PLAY           ((uint32_t)0x00)
+#define CMD_RECORD         ((uint32_t)0x01)
+#define CMD_STOP           ((uint32_t)0x02)
+
+typedef enum
+{
+  APPLICATION_IDLE = 0,
+  APPLICATION_START,
+  APPLICATION_RUNNING,
+}
+MSC_ApplicationTypeDef;
+
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
