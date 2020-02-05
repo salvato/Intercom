@@ -198,12 +198,12 @@ rf24(NRF24_CE_PORT,  NRF24_CE_PIN,
      NRF24_IRQ_PORT, NRF24_IRQ_PIN, NRF24_IRQ_CHAN);
 
 // Data Buffers
+uint8_t*  rxBuffer         = NULL;
+uint8_t*  txBuffer         = NULL;
 uint16_t* adcDataIn        = NULL;
 uint16_t* Audio_Out_Buffer = NULL;
-uint8_t*  txBuffer         = NULL;
 uint16_t* pdmDataIn        = NULL;
 uint16_t* pcmDataOut       = NULL;
-uint8_t*  inBuff           = NULL;
 uint16_t  offset;
 
 
@@ -232,6 +232,7 @@ uint8_t connectionAccepted = 0x11;
 uint8_t connectionAck      = 0x12;
 uint8_t suspendCmd         = 0x13;
 uint8_t suspendAck         = 0x14;
+
 
 #define MAX_CONNECTION_TIME  15000
 #define QUERY_INTERVAL       300
@@ -391,16 +392,16 @@ connectRemote() {
     setRole(PRX);
     rf24.flush_rx();
     rf24.setRetries(5, 15);//We don't need to bo very fast but reliable
-
+/*
     while(!bRemoteConnected) {
         BSP_LED_On(LED_RED);
         if(bRadioDataAvailable) {
             rf24.available(&pipe_num);
             bRadioDataAvailable = false;
             BSP_LED_On(LED_BLUE); // Signal the packet's start reading
-            rf24.read(inBuff, MAX_PAYLOAD_SIZE);
+            rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
             BSP_LED_Off(LED_BLUE); // Reading done
-            if(inBuff[0] == connectRequest) {
+            if(rxBuffer[0] == connectRequest) {
                 bConnectionRequested = true;
                 if(bConnectionAccepted) {
                     txBuffer[0] = connectionAccepted;
@@ -415,45 +416,45 @@ connectRemote() {
 //                    BSP_LED_Off(LED_ORANGE);
 //                }
             }
-            if(inBuff[0] == connectionAck) {
+            if(rxBuffer[0] == connectionAck) {
                 bRemoteConnected = true;
             }
         }
         BSP_LED_Off(LED_RED);
     }
+*/
 
-/*
     while(!bRemoteConnected) {
         BSP_LED_On(LED_RED);
         if(bRadioDataAvailable) {
             rf24.available(&pipe_num);
             bRadioDataAvailable = false;
             BSP_LED_On(LED_BLUE); // Signal the packet's start reading
-            rf24.read(inBuff, MAX_PAYLOAD_SIZE);
+            rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
             BSP_LED_Off(LED_BLUE);
-            if(inBuff[0] == connectRequest) {
+            if(rxBuffer[0] == connectRequest) {
                 bConnectionRequested = true;
                 // Non Funge !!!
-//                buffer_offset = BUFFER_OFFSET_NONE;
-//                // Link the USB Host disk I/O
-//                if(FATFS_LinkDriver(&USBH_Driver, USBDISKPath) == 0) {
-//                    USBH_Init(&hUSB_Host, USBH_UserProcess, 0);// Init Host Library
-//                    USBH_RegisterClass(&hUSB_Host, USBH_MSC_CLASS);// Add Supported Class
-//                    USBH_Start(&hUSB_Host);// Start Host Process
-//                }
+                buffer_offset = BUFFER_OFFSET_NONE;
+                // Link the USB Host disk I/O
+                if(FATFS_LinkDriver(&USBH_Driver, USBDISKPath) == 0) {
+                    USBH_Init(&hUSB_Host, USBH_UserProcess, 0);// Init Host Library
+                    USBH_RegisterClass(&hUSB_Host, USBH_MSC_CLASS);// Add Supported Class
+                    USBH_Start(&hUSB_Host);// Start Host Process
+                }
                 while(!bConnectionAccepted) {
-//                    switch(AppliState) {
-//                        case APPLICATION_START:
-//                            MSC_Application();
-//                            break;
-//                        case APPLICATION_IDLE:
-//                        default:
-//                            break;
-//                    }
-//                    USBH_Process(&hUSB_Host); // USBH_Background Process
+                    switch(AppliState) {
+                        case APPLICATION_START:
+                            MSC_Application();
+                            break;
+                        case APPLICATION_IDLE:
+                        default:
+                            break;
+                    }
+                    USBH_Process(&hUSB_Host); // USBH_Background Process
                     if(bRadioDataAvailable) {
                         rf24.available(&pipe_num);
-                        rf24.read(inBuff, MAX_PAYLOAD_SIZE);
+                        rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
                         bRadioDataAvailable = false;
                     }
                 }
@@ -465,14 +466,14 @@ connectRemote() {
 //                WavePlayerStop();
             } // if(bRadioDataAvailable)
 //            while(!bRadioDataAvailable){}
-//            rf24.read(inBuff, MAX_PAYLOAD_SIZE);
-//            if(inBuff[0] == connectionAck) {
+//            rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
+//            if(rxBuffer[0] == connectionAck) {
                 bRemoteConnected = true;
 //            }
         }
         BSP_LED_Off(LED_RED);
     }
-*/
+
     BSP_LED_Off(LED_RED);
 }
 
@@ -481,10 +482,11 @@ void
 connectBase() {
     setRole(PTX);
     rf24.flush_tx();
-    // At first we don't need to bo very fast but reliable
+    // At first we don't need to be very fast but reliable
     rf24.setRetries(5, 15);
     bool bBaseConnected = false;
     bBaseSleeping       = true;
+
     do {
         // We will be woken up only by a button press
         while(bBaseSleeping) {
@@ -494,9 +496,8 @@ connectBase() {
         startConnectTime = HAL_GetTick();
         uint32_t t0 = startConnectTime-2000;
         uint32_t elapsed = 0;
-        while(!bBaseConnected &&
-              (elapsed < MAX_CONNECTION_TIME))
-        {
+
+        do {
             if(HAL_GetTick()-t0 > QUERY_INTERVAL) {
                 t0 = HAL_GetTick();
                 txBuffer[0] = connectRequest;
@@ -507,20 +508,24 @@ connectBase() {
             }
             if(bRadioDataAvailable) {
                 bRadioDataAvailable = false;
-                BSP_LED_On(LED_BLUE); // Signal the packet's start reading
-                rf24.read(inBuff, MAX_PAYLOAD_SIZE);
-                BSP_LED_Off(LED_BLUE); // Reading done
-                if(inBuff[0] == connectionAccepted) {
+                BSP_LED_On(LED_ORANGE); // Signal the packet's start reading
+                rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
+                BSP_LED_Off(LED_ORANGE); // Reading done
+                if(rxBuffer[0] == connectionAccepted) {
                     txBuffer[0] = connectionAck;
                     rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
                     rf24.startWrite();
                     bBaseConnected = true;
+                    delayMicroseconds(6*250*15); // Give nRF24 time to transmit and wait for ACK
+                                                 // before changing role from PTX to PRX
                 }
             }
             elapsed = HAL_GetTick()-startConnectTime;
-        }
+        } while(!bBaseConnected && (elapsed < MAX_CONNECTION_TIME));
+
         ledsOff();
     } while(!bBaseConnected);
+
 }
 
 
@@ -550,9 +555,9 @@ processBase() {
             rf24.available(&pipe_num);
             if(pipe_num == 2) {// The packet is a command
                 BSP_LED_On(LED_BLUE); // Signal the packet's start reading
-                rf24.read(inBuff, MAX_PAYLOAD_SIZE);
+                rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
                 BSP_LED_Off(LED_BLUE); // Reading done
-                if(inBuff[0] == suspendCmd) {
+                if(rxBuffer[0] == suspendCmd) {
                     txBuffer[0] = suspendAck;
                     bSuspend = true;
                     rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
@@ -563,14 +568,14 @@ processBase() {
                 rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
                 // Then read the data...
                 BSP_LED_On(LED_BLUE); // Signal the packet's start reading
-                rf24.read(inBuff, MAX_PAYLOAD_SIZE);
+                rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
                 BSP_LED_Off(LED_BLUE); // Reading done
                 // Write data in the current Audio out chunk...
                 offset = chunk*MAX_PAYLOAD_SIZE;
                 for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
                     offset = (chunk*MAX_PAYLOAD_SIZE+indx) << 1;
-                    Audio_Out_Buffer[offset]   = inBuff[indx] << 8; // 1st Stereo Channel
-                    Audio_Out_Buffer[offset+1] = inBuff[indx] << 8; // 2nd Stereo Channel
+                    Audio_Out_Buffer[offset]   = rxBuffer[indx] << 8; // 1st Stereo Channel
+                    Audio_Out_Buffer[offset+1] = rxBuffer[indx] << 8; // 2nd Stereo Channel
                 }
             }// We have done with the new data.
         } // if(bRadioDataAvailable)
@@ -607,14 +612,14 @@ processRemote() {
         if(bRadioDataAvailable) {
             bRadioDataAvailable = false;
             BSP_LED_On(LED_BLUE); // Signal the packet's start reading
-            rf24.read(inBuff, MAX_PAYLOAD_SIZE);
+            rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
             BSP_LED_Off(LED_BLUE); // Reading done
             // Write data in the current chunk
             offset = chunk*MAX_PAYLOAD_SIZE;
             for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
                 offset = (chunk*MAX_PAYLOAD_SIZE+indx) << 1;
-                Audio_Out_Buffer[offset]   = inBuff[indx] << 8; // 1st Stereo Channel
-                Audio_Out_Buffer[offset+1] = inBuff[indx] << 8; // 2nd Stereo Channel
+                Audio_Out_Buffer[offset]   = rxBuffer[indx] << 8; // 1st Stereo Channel
+                Audio_Out_Buffer[offset+1] = rxBuffer[indx] << 8; // 2nd Stereo Channel
             }
             // We have done with the new data...
 
@@ -645,11 +650,11 @@ ledsOff() {
 void
 initBuffers(bool isBaseStation) {
     // Allocate common buffers... (The receive buffer and the Audio Out one)
-    if(!inBuff)
-        inBuff = (uint8_t*)malloc(MAX_PAYLOAD_SIZE*sizeof(*inBuff));
+    if(!rxBuffer)
+        rxBuffer = (uint8_t*)malloc(MAX_PAYLOAD_SIZE*sizeof(*rxBuffer));
     if(!Audio_Out_Buffer)
         Audio_Out_Buffer = (uint16_t*)malloc(2*2*MAX_PAYLOAD_SIZE*sizeof(*Audio_Out_Buffer));
-    memset(inBuff,           0, MAX_PAYLOAD_SIZE*sizeof(*inBuff));
+    memset(rxBuffer,           0, MAX_PAYLOAD_SIZE*sizeof(*rxBuffer));
     memset(Audio_Out_Buffer, 0, 2*2*MAX_PAYLOAD_SIZE*sizeof(*Audio_Out_Buffer));
 
     if(isBaseStation) {
