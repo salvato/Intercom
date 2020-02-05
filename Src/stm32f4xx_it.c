@@ -180,13 +180,6 @@ void SPIx_IRQHandler(void)
     HAL_SPI_IRQHandler(&SpiHandle);
 }
 
-
-//void EXTI15_10_IRQHandler(void)
-//{
-//  HAL_GPIO_EXTI_IRQHandler(KEY_BUTTON_PIN);
-//}
-
-
 /**
   * @}
   */

@@ -3,6 +3,7 @@
 
 #include "stm32f4_discovery.h"
 #include "stm32f4_discovery_audio.h"
+#include "usbh_def.h"
 
 #define WAVE_NAME "0:audio_sample.wav"
 
@@ -50,6 +51,11 @@ void EXTI0_IRQHandler(void);
 void EXTI1_IRQHandler(void);
 void I2S3_IRQHandler(void);
 void I2S2_IRQHandler(void);
+void OTG_FS_IRQHandler(void);
+void USBH_UserProcess(USBH_HandleTypeDef *pHost, uint8_t vId);
+void COMMAND_AudioExecuteApplication(void);
+void MSC_Application(void);
+
 
 void _delay_3t(uint32_t cycles);
 void delay_cycles(const int64_t cycles);

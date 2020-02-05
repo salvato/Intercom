@@ -79,12 +79,21 @@ typedef struct
 /* Exported constants --------------------------------------------------------*/
 /* Exported macro ------------------------------------------------------------*/
 /* Exported functions ------------------------------------------------------- */
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void  WavePlayBack(uint32_t AudioFreq);
 int   WavePlayerInit(uint32_t AudioFreq);
 void  WavePlayerStop(void);
 void  WavePlayerPauseResume(uint32_t state);
 void  WavePlayerStart(void);
 void  WavePlayer_CallBack(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

@@ -246,20 +246,26 @@ uint8_t suspendAck         = 0x14;
 FATFS USBDISKFatFs;          /* File system object for USB disk logical drive */
 char USBDISKPath[4];         /* USB Host logical drive path */
 USBH_HandleTypeDef hUSB_Host; /* USB Host handle */
-MSC_ApplicationTypeDef AppliState = APPLICATION_IDLE;
+
+MSC_ApplicationTypeDef AppliState = APPLICATION_START;//APPLICATION_IDLE;
 static uint8_t  USBH_USR_ApplicationState = USBH_USR_FS_INIT;
 
-/* Re-play Wave file status on/off.
-   Defined as external in waveplayer.c file */
+extern HCD_HandleTypeDef hhcd; // defined in usbh_conf.c
+
+/* Re-play Wave file status on/off. Defined as external in waveplayer.c file */
 __IO uint32_t RepeatState = REPEAT_ON;
+
+/* Wave Player Pause/Resume Status. Defined as external in waveplayer.c file */
+__IO uint32_t PauseResumeStatus = IDLE_STATUS;
+
+/* Counter for User button presses. Defined as external in waveplayer.c file */
+__IO uint32_t PressCount = 0;
 
 __IO uint32_t CmdIndex = CMD_PLAY;
 
 
-static void USBH_UserProcess(USBH_HandleTypeDef *pHost, uint8_t vId);
 
-
-static void
+void
 USBH_UserProcess (USBH_HandleTypeDef *pHost, uint8_t vId) {
     UNUSED(pHost);
     switch (vId) {
@@ -286,7 +292,7 @@ USBH_UserProcess (USBH_HandleTypeDef *pHost, uint8_t vId) {
 
 
 
-static void
+void
 COMMAND_AudioExecuteApplication(void) {
     /* Execute the command switch the command index */
     switch (CmdIndex) {
@@ -301,7 +307,7 @@ COMMAND_AudioExecuteApplication(void) {
 }
 
 
-static void
+void
 MSC_Application(void) {
     switch(USBH_USR_ApplicationState) {
         case USBH_USR_AUDIO:
@@ -328,6 +334,20 @@ MSC_Application(void) {
             break;
     }
 }
+
+
+
+/**
+  * @brief  This function handles USB-On-The-Go FS global interrupt request.
+  * @param  None
+  * @retval None
+  */
+void
+OTG_FS_IRQHandler(void) {
+  HAL_HCD_IRQHandler(&hhcd);
+}
+
+
 
 
 void

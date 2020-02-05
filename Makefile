@@ -52,6 +52,8 @@ HAL/Src/stm32f4xx_ll_usb.c \
 FatFs/src/ff.c \
 FatFs/src/diskio.c \
 FatFs/src/ff_gen_drv.c \
+FatFs/src/option/syscall.c \
+FatFs/src/option/ccsbcs.c \
 STM32_USB_Host_Library/Core/Src/usbh_core.c \
 STM32_USB_Host_Library/Class/MSC/Src/usbh_msc.c \
 STM32_USB_Host_Library/Class/MSC/Src/usbh_msc_scsi.c \

@@ -22,7 +22,6 @@ FatFs/src/ff.c
 FatFs/src/ff.h
 FatFs/src/ff_gen_drv.c
 FatFs/src/ff_gen_drv.h
-FatFs/src/ffconf_template.h
 FatFs/src/integer.h
 FatFs/src/option/cc932.c
 FatFs/src/option/cc936.c
