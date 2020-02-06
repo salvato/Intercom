@@ -338,6 +338,14 @@ main(void) {
     HAL_Init();
     initLeds();
     SystemClock_Config();
+    if(FATFS_LinkDriver(&USBH_Driver, USBDISKPath) == 0) {
+        USBH_Init(&hUSB_Host, USBH_UserProcess, 0);// Init Host Library
+        USBH_RegisterClass(&hUSB_Host, USBH_MSC_CLASS);// Add Supported Class
+        USBH_Start(&hUSB_Host);// Start Host Process
+    }
+    else {
+        Error_Handler();
+    }
     // Are we Base or Remote ?
     InitConfigPin();
     isBaseStation = HAL_GPIO_ReadPin(CONFIGURE_PORT, CONFIGURE_PIN);
@@ -390,11 +398,6 @@ connectRemote() {
                 bConnectionRequested = true;
                 buffer_offset = BUFFER_OFFSET_NONE;
                 // Link the USB Host disk I/O
-                if(FATFS_LinkDriver(&USBH_Driver, USBDISKPath) == 0) {
-                    USBH_Init(&hUSB_Host, USBH_UserProcess, 0);// Init Host Library
-                    USBH_RegisterClass(&hUSB_Host, USBH_MSC_CLASS);// Add Supported Class
-                    USBH_Start(&hUSB_Host);// Start Host Process
-                }
                 while(!bConnectionAccepted) {
                     switch(AppliState) {
                         case APPLICATION_START:
