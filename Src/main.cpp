@@ -447,12 +447,12 @@ connectRemote() {
 }
 
 
-// The Base, once having woken up by a button press,
-// send a "Connection Request" to the Remote and wait for
+// The Base, once being woken up by a button press,
+// send a "Connection Request" to the Remote and waits for
 // a "Connection Accepted" message within a given time.
 // If the "Connection Accepted" is received the Base assumes that
-// a Remote is ready to talk otherwise it returns sleeping.
-// DOES THE BASE SEND A MESSAGE WHEN IT GIVES UP ? <<========================
+// a Remote is ready to talk otherwise the Base send a message
+// when it gives up and returns sleeping.
 void
 connectBase() {
     setRole(PTX);
@@ -496,8 +496,14 @@ connectBase() {
         } while(!bBaseConnected && (elapsed < MAX_CONNECTION_TIME));
 
         ledsOff();
+        if(!bBaseConnected) {
+            txBuffer[0] = connectionTimedOut;
+            BSP_LED_On(LED_BLUE);
+            rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+            rf24.startWrite();
+            BSP_LED_Off(LED_BLUE);
+        }
     } while(!bBaseConnected);
-
 }
 
 
