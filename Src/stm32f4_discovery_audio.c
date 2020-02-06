@@ -211,8 +211,8 @@ static void PDMDecoder_Init(uint32_t AudioFreq, uint32_t ChnlNbrIn, uint32_t Chn
   * @param  AudioFreq: Audio frequency used to play the audio stream.
   * @retval AUDIO_OK if correct communication, else wrong communication
   */
-uint8_t BSP_AUDIO_OUT_Init(uint16_t OutputDevice, uint8_t Volume, uint32_t AudioFreq)
-{    
+uint8_t
+BSP_AUDIO_OUT_Init(uint16_t OutputDevice, uint8_t Volume, uint32_t AudioFreq) {
     uint8_t ret = AUDIO_OK;
 
     /* PLL clock is set depending by the AudioFreq (44.1khz vs 48khz groups) */
@@ -221,8 +221,7 @@ uint8_t BSP_AUDIO_OUT_Init(uint16_t OutputDevice, uint8_t Volume, uint32_t Audio
     /* I2S data transfer preparation:
        Prepare the Media to be used for the audio transfer from memory to I2S peripheral */
     hAudioOutI2s.Instance = I2S3;
-    if(HAL_I2S_GetState(&hAudioOutI2s) == HAL_I2S_STATE_RESET)
-    {
+    if(HAL_I2S_GetState(&hAudioOutI2s) == HAL_I2S_STATE_RESET) {
         /* Init the I2S MSP: this __weak function can be redefined by the application*/
         BSP_AUDIO_OUT_MspInit(&hAudioOutI2s, NULL);
     }
@@ -230,32 +229,28 @@ uint8_t BSP_AUDIO_OUT_Init(uint16_t OutputDevice, uint8_t Volume, uint32_t Audio
     /* I2S data transfer preparation:
        Prepare the Media to be used for the audio transfer from memory to I2S peripheral */
     /* Configure the I2S peripheral */
-    if(I2S3_Init(AudioFreq) != AUDIO_OK)
-    {
+    if(I2S3_Init(AudioFreq) != AUDIO_OK) {
         ret = AUDIO_ERROR;
     }
 
-    if(ret == AUDIO_OK)
-    {
+    if(ret == AUDIO_OK) {
         /* Retieve audio codec identifier */
-        if(((cs43l22_drv.ReadID(AUDIO_I2C_ADDRESS)) & CS43L22_ID_MASK) == CS43L22_ID)
-        {
+        if(((cs43l22_drv.ReadID(AUDIO_I2C_ADDRESS)) & CS43L22_ID_MASK) == CS43L22_ID) {
             /* Initialize the audio driver structure */
             pAudioDrv = &cs43l22_drv;
         }
-        else
-        {
+        else {
             ret = AUDIO_ERROR;
         }
     }
 
-    if(ret == AUDIO_OK)
-    {
+    if(ret == AUDIO_OK) {
         pAudioDrv->Init(AUDIO_I2C_ADDRESS, OutputDevice, Volume, AudioFreq);
     }
 
     return ret;
 }
+
 
 /**
   * @brief  Starts playing audio stream from a data buffer for a determined size.
@@ -476,6 +471,7 @@ void HAL_I2S_TxHalfCpltCallback(I2S_HandleTypeDef *hi2s)
     }
 }
 
+
 /**
   * @brief  Clock Config.
   * @param  hi2s: might be required to set audio peripheral predivider if any.
@@ -484,23 +480,22 @@ void HAL_I2S_TxHalfCpltCallback(I2S_HandleTypeDef *hi2s)
   *         Being __weak it can be overwritten by the application
   * @param  Params : pointer on additional configuration parameters, can be NULL.
   */
-__weak void BSP_AUDIO_OUT_ClockConfig(I2S_HandleTypeDef *hi2s, uint32_t AudioFreq, void *Params)
-{ 
+__weak void
+BSP_AUDIO_OUT_ClockConfig(I2S_HandleTypeDef *hi2s, uint32_t AudioFreq, void *Params) {
+    UNUSED(hi2s);
+    UNUSED(Params);
     RCC_PeriphCLKInitTypeDef rccclkinit;
     uint8_t index = 0, freqindex = 0xFF;
 
-    for(index = 0; index < 8; index++)
-    {
-        if(I2SFreq[index] == AudioFreq)
-        {
+    for(index = 0; index < 8; index++) {
+        if(I2SFreq[index] == AudioFreq) {
             freqindex = index;
         }
     }
     /* Enable PLLI2S clock */
     HAL_RCCEx_GetPeriphCLKConfig(&rccclkinit);
     /* PLLI2S_VCO Input = HSE_VALUE/PLL_M = 1 Mhz */
-    if ((freqindex & 0x7) == 0)
-    {
+    if ((freqindex & 0x7) == 0) {
         /* I2S clock config
     PLLI2S_VCO = f(VCO clock) = f(PLLI2S clock input) x (PLLI2SN/PLLM)
     I2SCLK = f(PLLI2S clock output) = f(VCO clock) / PLLI2SR */
@@ -509,8 +504,7 @@ __weak void BSP_AUDIO_OUT_ClockConfig(I2S_HandleTypeDef *hi2s, uint32_t AudioFre
         rccclkinit.PLLI2S.PLLI2SR = I2SPLLR[freqindex];
         HAL_RCCEx_PeriphCLKConfig(&rccclkinit);
     }
-    else
-    {
+    else {
         /* I2S clock config
     PLLI2S_VCO = f(VCO clock) = f(PLLI2S clock input) x (PLLI2SN/PLLM)
     I2SCLK = f(PLLI2S clock output) = f(VCO clock) / PLLI2SR */
@@ -520,6 +514,7 @@ __weak void BSP_AUDIO_OUT_ClockConfig(I2S_HandleTypeDef *hi2s, uint32_t AudioFre
         HAL_RCCEx_PeriphCLKConfig(&rccclkinit);
     }
 }
+
 
 /**
   * @brief  AUDIO OUT I2S MSP Init.

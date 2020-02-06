@@ -613,6 +613,7 @@ processRemote() {
     rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
     rf24.startWrite();
     BSP_LED_Off(LED_BLUE);
+    bConnectionAccepted = false;
 }
 
 
