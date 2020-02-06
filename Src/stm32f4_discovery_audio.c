@@ -219,7 +219,7 @@ uint8_t BSP_AUDIO_OUT_Init(uint16_t OutputDevice, uint8_t Volume, uint32_t Audio
     BSP_AUDIO_OUT_ClockConfig(&hAudioOutI2s, AudioFreq, NULL);
 
     /* I2S data transfer preparation:
-  Prepare the Media to be used for the audio transfer from memory to I2S peripheral */
+       Prepare the Media to be used for the audio transfer from memory to I2S peripheral */
     hAudioOutI2s.Instance = I2S3;
     if(HAL_I2S_GetState(&hAudioOutI2s) == HAL_I2S_STATE_RESET)
     {
@@ -228,7 +228,7 @@ uint8_t BSP_AUDIO_OUT_Init(uint16_t OutputDevice, uint8_t Volume, uint32_t Audio
     }
 
     /* I2S data transfer preparation:
-  Prepare the Media to be used for the audio transfer from memory to I2S peripheral */
+       Prepare the Media to be used for the audio transfer from memory to I2S peripheral */
     /* Configure the I2S peripheral */
     if(I2S3_Init(AudioFreq) != AUDIO_OK)
     {
@@ -502,7 +502,7 @@ __weak void BSP_AUDIO_OUT_ClockConfig(I2S_HandleTypeDef *hi2s, uint32_t AudioFre
     if ((freqindex & 0x7) == 0)
     {
         /* I2S clock config
-    PLLI2S_VCO = f(VCO clock) = f(PLLI2S clock input) × (PLLI2SN/PLLM)
+    PLLI2S_VCO = f(VCO clock) = f(PLLI2S clock input) x (PLLI2SN/PLLM)
     I2SCLK = f(PLLI2S clock output) = f(VCO clock) / PLLI2SR */
         rccclkinit.PeriphClockSelection = RCC_PERIPHCLK_I2S;
         rccclkinit.PLLI2S.PLLI2SN = I2SPLLN[freqindex];
@@ -512,7 +512,7 @@ __weak void BSP_AUDIO_OUT_ClockConfig(I2S_HandleTypeDef *hi2s, uint32_t AudioFre
     else
     {
         /* I2S clock config
-    PLLI2S_VCO = f(VCO clock) = f(PLLI2S clock input) × (PLLI2SN/PLLM)
+    PLLI2S_VCO = f(VCO clock) = f(PLLI2S clock input) x (PLLI2SN/PLLM)
     I2SCLK = f(PLLI2S clock output) = f(VCO clock) / PLLI2SR */
         rccclkinit.PeriphClockSelection = RCC_PERIPHCLK_I2S;
         rccclkinit.PLLI2S.PLLI2SN = 258;

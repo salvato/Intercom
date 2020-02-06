@@ -212,6 +212,7 @@ uint16_t  offset;
 uint32_t chunk = 0;
 bool     isBaseStation;
 uint8_t  status;
+uint8_t Volume;
 
 
 __IO bool tx_ok;
@@ -248,7 +249,7 @@ typedef enum {
 FATFS USBDISKFatFs;          /* File system object for USB disk logical drive */
 char USBDISKPath[4];         /* USB Host logical drive path */
 
-MSC_ApplicationTypeDef AppliState = APPLICATION_START;//APPLICATION_IDLE;
+MSC_ApplicationTypeDef AppliState = APPLICATION_IDLE;
 static uint8_t  USBH_USR_ApplicationState = USBH_USR_FS_INIT;
 
 /* Re-play Wave file status on/off. Defined as external in waveplayer.c file */
@@ -332,13 +333,12 @@ MSC_Application(void) {
 int
 main(void) {
     const uint8_t Channel = 76;
-    uint8_t Volume        = 70;   // % of Max
-
+    Volume = 70; // % of Max
     // System startup
     HAL_Init();
     initLeds();
     SystemClock_Config();
-    // Are we Base station or Remote ?
+    // Are we Base or Remote ?
     InitConfigPin();
     isBaseStation = HAL_GPIO_ReadPin(CONFIGURE_PORT, CONFIGURE_PIN);
     // Initialize the corresponding things..
@@ -348,35 +348,21 @@ main(void) {
     if(!rf24.begin(Channel, RADIO_IN_IRQ_PREPRIO)) Error_Handler();
     rf24.clearInterrupts();// Avoid false interrupts from Radio
     rf24.maskIRQ(false, false, false);
-
-    while(1) {
-        //=====================
-        // Connection Phase....
-        //=====================
-        if(isBaseStation)
+    while(true) {
+        if(isBaseStation) {
             connectBase();// We will be woken up by a button press
-        else
-            connectRemote();// We will be woken up by receiving a command
-        //=======================
-        // Connection Established
-        //=======================
-        bSuspend = false;
-        if(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO,
-                              Volume,
-                              DEFAULT_AUDIO_IN_FREQ) != AUDIO_OK)
-            Error_Handler();
-        //====================
-        // Start Processing...
-        //====================
-        if(isBaseStation)
             processBase();
-        else
+        }
+        else {
+            connectRemote();// We will be woken up by receiving a command
             processRemote();
-    } // while(1)
+        }
+    }
 }
 
+
 // The Remote stay receiving data until a "Connection Request" arrives from the Base.
-// It then start playing an Alarm sound and wait for the user to pick up the phone.
+// It then start playing an Alarm Sound and wait for the user to pick up the phone.
 // If the user does not interact within a given time the Remote stops the sound
 // ad return waiting a new call.
 // If the user interact within the given time it send a "Connectio Accepted" message
@@ -392,6 +378,8 @@ connectRemote() {
     rf24.setRetries(5, 15);//We don't need to bo very fast but reliable
 
     while(!bRemoteConnected) {
+        AppliState = APPLICATION_IDLE;
+        CmdIndex = CMD_PLAY;
         BSP_LED_On(LED_RED);
         if(bRadioDataAvailable) {
             bConnectionRequested = false;
@@ -434,7 +422,7 @@ connectRemote() {
                             rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
                             BSP_LED_Off(LED_ORANGE);
                             bRemoteConnected = true;
-                            delayMicroseconds(6*250*15); // Give nRF24 time to transmit before
+                            delayMicroseconds(1*250*15); // Give nRF24 time to transmit before
                                                          // changing role from PRX to PTX
                         }
                         else if(rxBuffer[0] == connectionTimedOut) {
@@ -513,6 +501,10 @@ connectBase() {
 
 void
 processBase() {
+    if(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO,
+                          Volume,
+                          DEFAULT_AUDIO_IN_FREQ) != AUDIO_OK)
+        Error_Handler();
     uint8_t pipe_num;
     setRole(PRX); // Change role from PTX to PRX...
     rf24.flush_rx();
@@ -570,6 +562,10 @@ processBase() {
 
 void
 processRemote() {
+    if(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO,
+                          Volume,
+                          DEFAULT_AUDIO_IN_FREQ) != AUDIO_OK)
+        Error_Handler();
     setRole(PTX); // Change role from PRX to PTX...
     rf24.flush_tx();
     bReady2Send  = false;
@@ -663,7 +659,7 @@ initBuffers(bool isBaseStation) {
 
 void
 BSP_AUDIO_OUT_ClockConfig(I2S_HandleTypeDef *hi2s, uint32_t AudioFreq, void *Params) {
-    // Ensure the clock is the same for MIC input and DAC output
+    // Ensure the clock is the same both for MIC input and DAC output
     BSP_AUDIO_IN_ClockConfig(hi2s, AudioFreq, Params);
 }
 
@@ -886,24 +882,12 @@ BSP_AUDIO_OUT_TransferComplete_CallBack(void) {
 }
 
 
-/*
-void
-BSP_AUDIO_OUT_TransferComplete_CallBack(void) {
-}
-*/
-
-
 void
 BSP_AUDIO_OUT_HalfTransfer_CallBack(void) {
     buffer_offset = BUFFER_OFFSET_HALF;
 }
 
 
-/**
-* @brief  Manages the DMA FIFO error interrupt.
-* @param  None
-* @retval None
-*/
 void
 BSP_AUDIO_OUT_Error_CallBack(void) {
     /* Stop the program with an infinite loop */
@@ -1027,11 +1011,6 @@ InitConfigPin() {
 }
 
 
-/**
-  * @brief  This function is executed in case of error occurrence.
-  * @param  None
-  * @retval None
-  */
 void
 NonFatalError_Handler(void) {// 2 sec of led blinking
     uint32_t t0 = HAL_GetTick();
