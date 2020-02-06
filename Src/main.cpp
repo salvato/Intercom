@@ -338,14 +338,13 @@ main(void) {
     HAL_Init();
     initLeds();
     SystemClock_Config();
-    if(FATFS_LinkDriver(&USBH_Driver, USBDISKPath) == 0) {
-        USBH_Init(&hUSB_Host, USBH_UserProcess, 0);// Init Host Library
-        USBH_RegisterClass(&hUSB_Host, USBH_MSC_CLASS);// Add Supported Class
-        USBH_Start(&hUSB_Host);// Start Host Process
-    }
-    else {
+    if(FATFS_LinkDriver(&USBH_Driver, USBDISKPath) != 0) {
         Error_Handler();
     }
+    USBH_Init(&hUSB_Host, USBH_UserProcess, 0);// Init Host Library
+    USBH_RegisterClass(&hUSB_Host, USBH_MSC_CLASS);// Add Supported Class
+    USBH_Start(&hUSB_Host);// Start Host Process
+
     // Are we Base or Remote ?
     InitConfigPin();
     isBaseStation = HAL_GPIO_ReadPin(CONFIGURE_PORT, CONFIGURE_PIN);
