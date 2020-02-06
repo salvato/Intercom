@@ -227,11 +227,12 @@ __IO uint32_t startConnectTime;
 
 
 // Commands
-uint8_t connectRequest     = 0x10;
-uint8_t connectionAccepted = 0x11;
-uint8_t connectionAck      = 0x12;
-uint8_t suspendCmd         = 0x13;
-uint8_t suspendAck         = 0x14;
+typedef enum {
+    connectRequest = 0x10,
+    connectionAccepted,
+    suspendCmd,
+    suspendAck
+} Commands;
 
 
 #define MAX_CONNECTION_TIME  15000
@@ -382,7 +383,12 @@ main(void) {
     } // while(1)
 }
 
-
+// The Remote stay receiving data until a "Connection Request" arrives from the Base.
+// It then start playing an Alarm sound and wait for the user to pick up the phone.
+// If the user does not interact within a given time the Remote stops the sound
+// ad return waiting a new call.
+// If the user interact within the given time it send a "Connectio Accepted" message
+// and assumes to be connected with the Base.
 void
 connectRemote() {
     uint8_t pipe_num;
@@ -392,49 +398,17 @@ connectRemote() {
     setRole(PRX);
     rf24.flush_rx();
     rf24.setRetries(5, 15);//We don't need to bo very fast but reliable
-/*
-    while(!bRemoteConnected) {
-        BSP_LED_On(LED_RED);
-        if(bRadioDataAvailable) {
-            rf24.available(&pipe_num);
-            bRadioDataAvailable = false;
-            BSP_LED_On(LED_BLUE); // Signal the packet's start reading
-            rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
-            BSP_LED_Off(LED_BLUE); // Reading done
-            if(rxBuffer[0] == connectRequest) {
-                bConnectionRequested = true;
-                if(bConnectionAccepted) {
-                    txBuffer[0] = connectionAccepted;
-                    BSP_LED_On(LED_ORANGE);
-                    rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
-                    BSP_LED_Off(LED_ORANGE);
-                }
-//                else {
-//                    txBuffer[0] = connectRequest;
-//                    BSP_LED_On(LED_ORANGE);
-//                    rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
-//                    BSP_LED_Off(LED_ORANGE);
-//                }
-            }
-            if(rxBuffer[0] == connectionAck) {
-                bRemoteConnected = true;
-            }
-        }
-        BSP_LED_Off(LED_RED);
-    }
-*/
 
     while(!bRemoteConnected) {
         BSP_LED_On(LED_RED);
         if(bRadioDataAvailable) {
             rf24.available(&pipe_num);
             bRadioDataAvailable = false;
-            BSP_LED_On(LED_BLUE); // Signal the packet's start reading
+            BSP_LED_On(LED_BLUE);
             rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
             BSP_LED_Off(LED_BLUE);
             if(rxBuffer[0] == connectRequest) {
                 bConnectionRequested = true;
-                // Non Funge !!!
                 buffer_offset = BUFFER_OFFSET_NONE;
                 // Link the USB Host disk I/O
                 if(FATFS_LinkDriver(&USBH_Driver, USBDISKPath) == 0) {
@@ -452,32 +426,41 @@ connectRemote() {
                             break;
                     }
                     USBH_Process(&hUSB_Host); // USBH_Background Process
-                    if(bRadioDataAvailable) {
-                        rf24.available(&pipe_num);
-                        rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
-                        bRadioDataAvailable = false;
-                    }
                 }
-//                while(!bRadioDataAvailable){}
-                txBuffer[0] = connectionAccepted;
-                BSP_LED_On(LED_ORANGE);
-                rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
-                BSP_LED_Off(LED_ORANGE);
-//                WavePlayerStop();
+                rf24.flush_rx();
+                bRadioDataAvailable = false;
+                startConnectTime = HAL_GetTick();
+                uint32_t elapsed = 0;
+                do {
+                    if(bRadioDataAvailable) {
+                        bRadioDataAvailable = false;
+                        rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
+                        if(rxBuffer[0] == connectRequest) { // Base is still asking for connection
+                            txBuffer[0] = connectionAccepted;
+                            BSP_LED_On(LED_ORANGE);
+                            rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
+                            BSP_LED_Off(LED_ORANGE);
+                            bRemoteConnected = true;
+                            delayMicroseconds(6*250*15); // Give nRF24 time to transmit before
+                                                         // changing role from PRX to PTX
+                        }
+                    }
+                    elapsed = HAL_GetTick()-startConnectTime;
+                } while(!bRemoteConnected || (elapsed < 5000));
             } // if(bRadioDataAvailable)
-//            while(!bRadioDataAvailable){}
-//            rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
-//            if(rxBuffer[0] == connectionAck) {
-                bRemoteConnected = true;
-//            }
         }
         BSP_LED_Off(LED_RED);
     }
-
     BSP_LED_Off(LED_RED);
 }
 
 
+// The Base, once having woken up by a button press,
+// send a "Connection Request" to the Remote and wait for
+// a "Connection Accepted" message within a given time.
+// If the "Connection Accepted" is received the Base assumes that
+// a Remote is ready to talk otherwise it returns sleeping.
+// DOES THE BASE SEND A MESSAGE WHEN IT GIVES UP ? <<========================
 void
 connectBase() {
     setRole(PTX);
@@ -512,9 +495,6 @@ connectBase() {
                 rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
                 BSP_LED_Off(LED_ORANGE); // Reading done
                 if(rxBuffer[0] == connectionAccepted) {
-                    txBuffer[0] = connectionAck;
-                    rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-                    rf24.startWrite();
                     bBaseConnected = true;
                     delayMicroseconds(6*250*15); // Give nRF24 time to transmit and wait for ACK
                                                  // before changing role from PTX to PRX
