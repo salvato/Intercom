@@ -394,6 +394,7 @@ connectRemote() {
     while(!bRemoteConnected) {
         BSP_LED_On(LED_RED);
         if(bRadioDataAvailable) {
+            bConnectionRequested = false;
             rf24.available(&pipe_num);
             bRadioDataAvailable = false;
             BSP_LED_On(LED_BLUE);
@@ -435,6 +436,9 @@ connectRemote() {
                             bRemoteConnected = true;
                             delayMicroseconds(6*250*15); // Give nRF24 time to transmit before
                                                          // changing role from PRX to PTX
+                        }
+                        else if(rxBuffer[0] == connectionTimedOut) {
+                            break;
                         }
                     }
                     elapsed = HAL_GetTick()-startConnectTime;
