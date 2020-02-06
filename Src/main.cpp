@@ -369,7 +369,6 @@ main(void) {
 // and assumes to be connected with the Base.
 void
 connectRemote() {
-    uint8_t pipe_num;
     bool bRemoteConnected = false;
     bConnectionAccepted   = false;
     bConnectionRequested  = false;
@@ -382,9 +381,8 @@ connectRemote() {
         CmdIndex = CMD_PLAY;
         BSP_LED_On(LED_RED);
         if(bRadioDataAvailable) {
-            bConnectionRequested = false;
-            rf24.available(&pipe_num);
             bRadioDataAvailable = false;
+            bConnectionRequested = false;
             BSP_LED_On(LED_BLUE);
             rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
             BSP_LED_Off(LED_BLUE);
@@ -419,7 +417,7 @@ connectRemote() {
                         if(rxBuffer[0] == connectRequest) { // Base is still asking for connection
                             txBuffer[0] = connectionAccepted;
                             BSP_LED_On(LED_ORANGE);
-                            rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
+                            rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
                             BSP_LED_Off(LED_ORANGE);
                             bRemoteConnected = true;
                             delayMicroseconds(1*250*15); // Give nRF24 time to transmit before
