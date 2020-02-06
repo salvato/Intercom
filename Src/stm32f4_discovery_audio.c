@@ -258,15 +258,13 @@ BSP_AUDIO_OUT_Init(uint16_t OutputDevice, uint8_t Volume, uint32_t AudioFreq) {
   * @param  Size: Number of audio data BYTES.
   * @retval AUDIO_OK if correct communication, else wrong communication
   */
-uint8_t BSP_AUDIO_OUT_Play(uint16_t* pBuffer, uint32_t Size)
-{
+uint8_t
+BSP_AUDIO_OUT_Play(uint16_t* pBuffer, uint32_t Size) {
     /* Call the audio Codec Play function */
-    if(pAudioDrv->Play(AUDIO_I2C_ADDRESS, pBuffer, Size) != 0)
-    {
+    if(pAudioDrv->Play(AUDIO_I2C_ADDRESS, pBuffer, Size) != 0) {
         return AUDIO_ERROR;
     }
-    else
-    {
+    else {
         /* Update the Media layer and enable it for play */
         HAL_I2S_Transmit_DMA(&hAudioOutI2s, pBuffer, DMA_MAX(Size/AUDIODATA_SIZE));
 
@@ -275,15 +273,17 @@ uint8_t BSP_AUDIO_OUT_Play(uint16_t* pBuffer, uint32_t Size)
     }
 }
 
+
 /**
   * @brief  Sends n-Bytes on the I2S interface.
   * @param  pData: Pointer to data address
   * @param  Size: Number of data to be written
   */
-void BSP_AUDIO_OUT_ChangeBuffer(uint16_t *pData, uint16_t Size)
-{
+void
+BSP_AUDIO_OUT_ChangeBuffer(uint16_t *pData, uint16_t Size) {
     HAL_I2S_Transmit_DMA(&hAudioOutI2s, pData, Size);
 }
+
 
 /**
   * @brief   Pauses the audio file stream. In case of using DMA, the DMA Pause
@@ -293,15 +293,13 @@ void BSP_AUDIO_OUT_ChangeBuffer(uint16_t *pData, uint16_t Size)
   *          function for resume could lead to unexpected behavior).
   * @retval  AUDIO_OK if correct communication, else wrong communication
   */
-uint8_t BSP_AUDIO_OUT_Pause(void)
-{    
+uint8_t
+BSP_AUDIO_OUT_Pause(void) {
     /* Call the Audio Codec Pause/Resume function */
-    if(pAudioDrv->Pause(AUDIO_I2C_ADDRESS) != 0)
-    {
+    if(pAudioDrv->Pause(AUDIO_I2C_ADDRESS) != 0) {
         return AUDIO_ERROR;
     }
-    else
-    {
+    else {
         /* Call the Media layer pause function */
         HAL_I2S_DMAPause(&hAudioOutI2s);
 
@@ -310,6 +308,7 @@ uint8_t BSP_AUDIO_OUT_Pause(void)
     }
 }
 
+
 /**
   * @brief   Resumes the audio file streaming.
   * WARNING: When calling BSP_AUDIO_OUT_Pause() function for pause, only
@@ -317,15 +316,13 @@ uint8_t BSP_AUDIO_OUT_Pause(void)
   *          function for resume could lead to unexpected behavior).
   * @retval  AUDIO_OK if correct communication, else wrong communication
   */
-uint8_t BSP_AUDIO_OUT_Resume(void)
-{    
+uint8_t
+BSP_AUDIO_OUT_Resume(void) {
     /* Call the Audio Codec Pause/Resume function */
-    if(pAudioDrv->Resume(AUDIO_I2C_ADDRESS) != 0)
-    {
+    if(pAudioDrv->Resume(AUDIO_I2C_ADDRESS) != 0) {
         return AUDIO_ERROR;
     }
-    else
-    {
+    else {
         /* Call the Media layer resume function */
         HAL_I2S_DMAResume(&hAudioOutI2s);
 
@@ -334,6 +331,7 @@ uint8_t BSP_AUDIO_OUT_Resume(void)
     }
 }
 
+
 /**
   * @brief  Stops audio playing and Power down the Audio Codec.
   * @param  Option: could be one of the following parameters
@@ -341,31 +339,26 @@ uint8_t BSP_AUDIO_OUT_Resume(void)
   *                            Then need to reconfigure the Codec after power on.
   * @retval AUDIO_OK if correct communication, else wrong communication
   */
-uint8_t BSP_AUDIO_OUT_Stop(uint32_t Option)
-{
+uint8_t
+BSP_AUDIO_OUT_Stop(uint32_t Option) {
     /* Call DMA Stop to disable DMA stream before stopping codec */
     HAL_I2S_DMAStop(&hAudioOutI2s);
-
     /* Call Audio Codec Stop function */
-    if(pAudioDrv->Stop(AUDIO_I2C_ADDRESS, Option) != 0)
-    {
+    if(pAudioDrv->Stop(AUDIO_I2C_ADDRESS, Option) != 0) {
         return AUDIO_ERROR;
     }
-    else
-    {
-        if(Option == CODEC_PDWN_HW)
-        {
+    else {
+        if(Option == CODEC_PDWN_HW) {
             /* Wait at least 1ms */
             HAL_Delay(1);
-
             /* Reset the pin */
             HAL_GPIO_WritePin(AUDIO_RESET_GPIO, AUDIO_RESET_PIN, GPIO_PIN_RESET);
         }
-
         /* Return AUDIO_OK when all operations are correctly done */
         return AUDIO_OK;
     }
 }
+
 
 /**
   * @brief  Controls the current audio volume level.
@@ -373,19 +366,18 @@ uint8_t BSP_AUDIO_OUT_Stop(uint32_t Option)
   *         Mute and 100 for Max volume level).
   * @retval AUDIO_OK if correct communication, else wrong communication
   */
-uint8_t BSP_AUDIO_OUT_SetVolume(uint8_t Volume)
-{
+uint8_t
+BSP_AUDIO_OUT_SetVolume(uint8_t Volume) {
     /* Call the codec volume control function with converted volume value */
-    if(pAudioDrv->SetVolume(AUDIO_I2C_ADDRESS, Volume) != 0)
-    {
+    if(pAudioDrv->SetVolume(AUDIO_I2C_ADDRESS, Volume) != 0) {
         return AUDIO_ERROR;
     }
-    else
-    {
+    else {
         /* Return AUDIO_OK when all operations are correctly done */
         return AUDIO_OK;
     }
 }
+
 
 /**
   * @brief  Enables or disables the MUTE mode by software
@@ -393,19 +385,18 @@ uint8_t BSP_AUDIO_OUT_SetVolume(uint8_t Volume)
   *         unmute the codec and restore previous volume level.
   * @retval AUDIO_OK if correct communication, else wrong communication
   */
-uint8_t BSP_AUDIO_OUT_SetMute(uint32_t Cmd)
-{ 
+uint8_t
+BSP_AUDIO_OUT_SetMute(uint32_t Cmd) {
     /* Call the Codec Mute function */
-    if(pAudioDrv->SetMute(AUDIO_I2C_ADDRESS, Cmd) != 0)
-    {
+    if(pAudioDrv->SetMute(AUDIO_I2C_ADDRESS, Cmd) != 0) {
         return AUDIO_ERROR;
     }
-    else
-    {
+    else {
         /* Return AUDIO_OK when all operations are correctly done */
         return AUDIO_OK;
     }
 }
+
 
 /**
   * @brief  Switch dynamically (while audio file is played) the output target
@@ -415,19 +406,18 @@ uint8_t BSP_AUDIO_OUT_SetMute(uint32_t Cmd)
   *         OUTPUT_DEVICE_HEADPHONE, OUTPUT_DEVICE_BOTH or OUTPUT_DEVICE_AUTO
   * @retval AUDIO_OK if correct communication, else wrong communication
   */
-uint8_t BSP_AUDIO_OUT_SetOutputMode(uint8_t Output)
-{
+uint8_t
+BSP_AUDIO_OUT_SetOutputMode(uint8_t Output) {
     /* Call the Codec output Device function */
-    if(pAudioDrv->SetOutputMode(AUDIO_I2C_ADDRESS, Output) != 0)
-    {
+    if(pAudioDrv->SetOutputMode(AUDIO_I2C_ADDRESS, Output) != 0) {
         return AUDIO_ERROR;
     }
-    else
-    {
+    else {
         /* Return AUDIO_OK when all operations are correctly done */
         return AUDIO_OK;
     }
 }
+
 
 /**
   * @brief  Update the audio frequency.
@@ -435,36 +425,35 @@ uint8_t BSP_AUDIO_OUT_SetOutputMode(uint8_t Output)
   * @note   This API should be called after the BSP_AUDIO_OUT_Init() to adjust the
   *         audio frequency.
   */
-void BSP_AUDIO_OUT_SetFrequency(uint32_t AudioFreq)
-{
+void
+BSP_AUDIO_OUT_SetFrequency(uint32_t AudioFreq) {
     /* PLL clock is set depending by the AudioFreq (44.1khz vs 48khz groups) */
     BSP_AUDIO_OUT_ClockConfig(&hAudioOutI2s, AudioFreq, NULL);
-
     /* Update the I2S audio frequency configuration */
     I2S3_Init(AudioFreq);
 }
+
 
 /**
   * @brief  Tx Transfer completed callbacks.
   * @param  hi2s: I2S handle
   */
-void HAL_I2S_TxCpltCallback(I2S_HandleTypeDef *hi2s)
-{
-    if(hi2s->Instance == I2S3)
-    {
+void
+HAL_I2S_TxCpltCallback(I2S_HandleTypeDef *hi2s) {
+    if(hi2s->Instance == I2S3) {
         /* Call the user function which will manage directly transfer complete */
         BSP_AUDIO_OUT_TransferComplete_CallBack();
     }
 }
 
+
 /**
   * @brief  Tx Half Transfer completed callbacks.
   * @param  hi2s: I2S handle
   */
-void HAL_I2S_TxHalfCpltCallback(I2S_HandleTypeDef *hi2s)
-{
-    if(hi2s->Instance == I2S3)
-    {
+void
+HAL_I2S_TxHalfCpltCallback(I2S_HandleTypeDef *hi2s) {
+    if(hi2s->Instance == I2S3) {
         /* Manage the remaining file size and new address offset: This function should
        be coded by user (its prototype is already declared in stm32f4_discovery_audio.h) */
         BSP_AUDIO_OUT_HalfTransfer_CallBack();
@@ -521,8 +510,9 @@ BSP_AUDIO_OUT_ClockConfig(I2S_HandleTypeDef *hi2s, uint32_t AudioFreq, void *Par
   * @param  hi2s: might be required to set audio peripheral predivider if any.
   * @param  Params : pointer on additional configuration parameters, can be NULL.
   */
-__weak void BSP_AUDIO_OUT_MspInit(I2S_HandleTypeDef *hi2s, void *Params)
-{
+__weak void
+BSP_AUDIO_OUT_MspInit(I2S_HandleTypeDef *hi2s, void *Params) {
+    UNUSED(Params);
     static DMA_HandleTypeDef hdma_i2sTx;
     GPIO_InitTypeDef  GPIO_InitStruct;
 
@@ -553,8 +543,7 @@ __weak void BSP_AUDIO_OUT_MspInit(I2S_HandleTypeDef *hi2s, void *Params)
     /* Enable the I2S DMA clock */
     I2S3_DMAx_CLK_ENABLE();
 
-    if(hi2s->Instance == I2S3)
-    {
+    if(hi2s->Instance == I2S3) {
         /* Configure the hdma_i2sTx handle parameters */
         hdma_i2sTx.Init.Channel             = I2S3_DMAx_CHANNEL;
         hdma_i2sTx.Init.Direction           = DMA_MEMORY_TO_PERIPH;
@@ -586,20 +575,21 @@ __weak void BSP_AUDIO_OUT_MspInit(I2S_HandleTypeDef *hi2s, void *Params)
     HAL_NVIC_EnableIRQ(I2S3_DMAx_IRQ);
 }
 
+
 /**
   * @brief  De-Initializes BSP_AUDIO_OUT MSP.
   * @param  hi2s: might be required to set audio peripheral predivider if any.
   * @param  Params : pointer on additional configuration parameters, can be NULL.
   */
-__weak void BSP_AUDIO_OUT_MspDeInit(I2S_HandleTypeDef *hi2s, void *Params)
-{  
+__weak void
+BSP_AUDIO_OUT_MspDeInit(I2S_HandleTypeDef *hi2s, void *Params) {
+    UNUSED(Params);
     GPIO_InitTypeDef  GPIO_InitStruct;
 
     /* I2S DMA IRQ Channel deactivation */
     HAL_NVIC_DisableIRQ(I2S3_DMAx_IRQ);
 
-    if(hi2s->Instance == I2S3)
-    {
+    if(hi2s->Instance == I2S3) {
         /* Deinitialize the Stream for new transfer */
         HAL_DMA_DeInit(hi2s->hdmatx);
     }
@@ -626,25 +616,28 @@ __weak void BSP_AUDIO_OUT_MspDeInit(I2S_HandleTypeDef *hi2s, void *Params)
      by surcgarging this __weak function */
 }
 
+
 /**
   * @brief  Manages the DMA full Transfer complete event.
   */
-__weak void BSP_AUDIO_OUT_TransferComplete_CallBack(void)
-{
+__weak void
+BSP_AUDIO_OUT_TransferComplete_CallBack(void) {
 }
+
 
 /**
   * @brief  Manages the DMA Half Transfer complete event.
   */
-__weak void BSP_AUDIO_OUT_HalfTransfer_CallBack(void)
-{
+__weak void
+BSP_AUDIO_OUT_HalfTransfer_CallBack(void) {
 }
+
 
 /**
   * @brief  Manages the DMA FIFO error event.
   */
-__weak void BSP_AUDIO_OUT_Error_CallBack(void)
-{
+__weak void
+BSP_AUDIO_OUT_Error_CallBack(void) {
 }
 
 /*******************************************************************************
@@ -655,8 +648,8 @@ __weak void BSP_AUDIO_OUT_Error_CallBack(void)
   * @brief  Initializes the Audio Codec audio interface (I2S).
   * @param  AudioFreq: Audio frequency to be configured for the I2S peripheral.
   */
-static uint8_t I2S3_Init(uint32_t AudioFreq)
-{
+static uint8_t
+I2S3_Init(uint32_t AudioFreq) {
     /* Initialize the hAudioOutI2s Instance parameter */
     hAudioOutI2s.Instance         = I2S3;
 
@@ -672,15 +665,14 @@ static uint8_t I2S3_Init(uint32_t AudioFreq)
     hAudioOutI2s.Init.Mode        = I2S_MODE_MASTER_TX;
     hAudioOutI2s.Init.Standard    = I2S_STANDARD;
     /* Initialize the I2S peripheral with the structure above */
-    if(HAL_I2S_Init(&hAudioOutI2s) != HAL_OK)
-    {
+    if(HAL_I2S_Init(&hAudioOutI2s) != HAL_OK) {
         return AUDIO_ERROR;
     }
-    else
-    {
+    else {
         return AUDIO_OK;
     }
 }
+
 
 /**
   * @}
@@ -697,8 +689,9 @@ static uint8_t I2S3_Init(uint32_t AudioFreq)
   * @param  ChnlNbr: Audio frequency to be configured for the I2S peripheral.
   * @retval AUDIO_OK if correct communication, else wrong communication
   */
-uint8_t BSP_AUDIO_IN_Init(uint32_t AudioFreq, uint32_t BitRes, uint32_t ChnlNbr)
-{
+uint8_t
+BSP_AUDIO_IN_Init(uint32_t AudioFreq, uint32_t BitRes, uint32_t ChnlNbr) {
+    UNUSED(BitRes);
 
     /* Configure PLL clock */
     BSP_AUDIO_IN_ClockConfig(&hAudioInI2s, AudioFreq, NULL);
@@ -710,8 +703,7 @@ uint8_t BSP_AUDIO_IN_Init(uint32_t AudioFreq, uint32_t BitRes, uint32_t ChnlNbr)
 
     /* Configure the I2S peripheral */
     hAudioInI2s.Instance = I2S2;
-    if(HAL_I2S_GetState(&hAudioInI2s) == HAL_I2S_STATE_RESET)
-    {
+    if(HAL_I2S_GetState(&hAudioInI2s) == HAL_I2S_STATE_RESET) {
         /* Initialize the I2S Msp: this __weak function can be rewritten by the application */
         BSP_AUDIO_IN_MspInit(&hAudioInI2s, NULL);
     }
@@ -723,14 +715,15 @@ uint8_t BSP_AUDIO_IN_Init(uint32_t AudioFreq, uint32_t BitRes, uint32_t ChnlNbr)
     return AUDIO_OK;
 }
 
+
 /**
   * @brief  Starts audio recording.
   * @param  pbuf: Main buffer pointer for the recorded data storing
   * @param  size: Current size of the recorded buffer
   * @retval AUDIO_OK if correct communication, else wrong communication
   */
-uint8_t BSP_AUDIO_IN_Record(uint16_t* pbuf, uint32_t size)
-{
+uint8_t
+BSP_AUDIO_IN_Record(uint16_t* pbuf, uint32_t size) {
     uint32_t ret = AUDIO_ERROR;
 
     /* Start the process receive DMA */
@@ -742,12 +735,13 @@ uint8_t BSP_AUDIO_IN_Record(uint16_t* pbuf, uint32_t size)
     return ret;
 }
 
+
 /**
   * @brief  Stops audio recording.
   * @retval AUDIO_OK if correct communication, else wrong communication
   */
-uint8_t BSP_AUDIO_IN_Stop(void)
-{
+uint8_t
+BSP_AUDIO_IN_Stop(void) {
     uint32_t ret = AUDIO_ERROR;
 
     /* Call the Media layer pause function */
@@ -759,12 +753,13 @@ uint8_t BSP_AUDIO_IN_Stop(void)
     return ret;
 }
 
+
 /**
   * @brief  Pauses the audio file stream.
   * @retval AUDIO_OK if correct communication, else wrong communication
   */
-uint8_t BSP_AUDIO_IN_Pause(void)
-{    
+uint8_t
+BSP_AUDIO_IN_Pause(void) {
     /* Call the Media layer pause function */
     HAL_I2S_DMAPause(&hAudioInI2s);
 
@@ -772,12 +767,13 @@ uint8_t BSP_AUDIO_IN_Pause(void)
     return AUDIO_OK;
 }
 
+
 /**
   * @brief  Resumes the audio file stream.
   * @retval AUDIO_OK if correct communication, else wrong communication
   */
-uint8_t BSP_AUDIO_IN_Resume(void)
-{    
+uint8_t
+BSP_AUDIO_IN_Resume(void) {
     /* Call the Media layer pause/resume function */
     HAL_I2S_DMAResume(&hAudioInI2s);
 
@@ -785,14 +781,15 @@ uint8_t BSP_AUDIO_IN_Resume(void)
     return AUDIO_OK;
 }
 
+
 /**
   * @brief  Controls the audio in volume level.
   * @param  Volume: Volume level to be set in percentage from 0% to 100% (0 for
   *         Mute and 100 for Max volume level).
   * @retval AUDIO_OK if correct communication, else wrong communication
   */
-uint8_t BSP_AUDIO_IN_SetVolume(uint8_t Volume)
-{
+uint8_t
+BSP_AUDIO_IN_SetVolume(uint8_t Volume) {
     /* Set the Global variable AudioInVolume */
     AudioInVolume = Volume;
 
@@ -800,31 +797,29 @@ uint8_t BSP_AUDIO_IN_SetVolume(uint8_t Volume)
     return AUDIO_OK;
 }
 
+
 /**
   * @brief  Converts audio format from PDM to PCM.
   * @param  PDMBuf: Pointer to data PDM buffer
   * @param  PCMBuf: Pointer to data PCM buffer
   * @retval AUDIO_OK if correct communication, else wrong communication
   */
-uint8_t BSP_AUDIO_IN_PDMToPCM(uint16_t *PDMBuf, uint16_t *PCMBuf)
-{
+uint8_t
+BSP_AUDIO_IN_PDMToPCM(uint16_t *PDMBuf, uint16_t *PCMBuf) {
     uint16_t AppPDM[INTERNAL_BUFF_SIZE/2];
     uint32_t index = 0;
 
     /* PDM Demux */
-    for(index = 0; index<INTERNAL_BUFF_SIZE/2; index++)
-    {
+    for(index = 0; index<INTERNAL_BUFF_SIZE/2; index++) {
         AppPDM[index] = HTONS(PDMBuf[index]);
     }
 
-    for(index = 0; index < DEFAULT_AUDIO_IN_CHANNEL_NBR; index++)
-    {
+    for(index = 0; index < DEFAULT_AUDIO_IN_CHANNEL_NBR; index++) {
         /* PDM to PCM filter */
         PDM_Filter((uint8_t*)&AppPDM[index], (uint16_t*)&(PCMBuf[index]), &PDM_FilterHandler[index]);
     }
     /* Duplicate samples since a single microphone in mounted on STM32F4-Discovery */
-    for(index = 0; index < PCM_OUT_SIZE; index++)
-    {
+    for(index = 0; index < PCM_OUT_SIZE; index++) {
         PCMBuf[(index<<1)+1] = PCMBuf[index<<1];
     }
 
@@ -832,26 +827,31 @@ uint8_t BSP_AUDIO_IN_PDMToPCM(uint16_t *PDMBuf, uint16_t *PCMBuf)
     return AUDIO_OK;
 }
 
+
 /**
   * @brief  Rx Transfer completed callbacks
   * @param  hi2s: I2S handle
   */
-void HAL_I2S_RxCpltCallback(I2S_HandleTypeDef *hi2s)
-{
+void
+HAL_I2S_RxCpltCallback(I2S_HandleTypeDef *hi2s) {
+    UNUSED(hi2s);
     /* Call the record update function to get the next buffer to fill and its size (size is ignored) */
     BSP_AUDIO_IN_TransferComplete_CallBack();
 }
+
 
 /**
   * @brief  Rx Half Transfer completed callbacks.
   * @param  hi2s: I2S handle
   */
-void HAL_I2S_RxHalfCpltCallback(I2S_HandleTypeDef *hi2s)
-{
+void
+HAL_I2S_RxHalfCpltCallback(I2S_HandleTypeDef *hi2s) {
+    UNUSED(hi2s);
     /* Manage the remaining file size and new address offset: This function
      should be coded by user (its prototype is already declared in stm32f4_discovery_audio.h) */
     BSP_AUDIO_IN_HalfTransfer_CallBack();
 }
+
 
 /**
   * @brief  Audio In Clock Config.
@@ -861,15 +861,16 @@ void HAL_I2S_RxHalfCpltCallback(I2S_HandleTypeDef *hi2s)
   * @note   This API is called by BSP_AUDIO_IN_Init()
   *         Being __weak it can be overwritten by the application
   */
-__weak void BSP_AUDIO_IN_ClockConfig(I2S_HandleTypeDef *hi2s, uint32_t AudioFreq, void *Params)
-{
+__weak void
+BSP_AUDIO_IN_ClockConfig(I2S_HandleTypeDef *hi2s, uint32_t AudioFreq, void *Params) {
+    UNUSED(hi2s);
+    UNUSED(Params);
     RCC_PeriphCLKInitTypeDef rccclkinit;
 
     /*Enable PLLI2S clock*/
     HAL_RCCEx_GetPeriphCLKConfig(&rccclkinit);
     /* PLLI2S_VCO Input = HSE_VALUE/PLL_M = 1 Mhz */
-    if ((AudioFreq & 0x7) == 0)
-    {
+    if ((AudioFreq & 0x7) == 0) {
         /* Audio frequency multiple of 8 (8/16/32/48/96/192)*/
         /* PLLI2S_VCO Output = PLLI2S_VCO Input * PLLI2SN = 192 Mhz */
         /* I2SCLK = PLLI2S_VCO Output/PLLI2SR = 192/6 = 32 Mhz */
@@ -878,8 +879,7 @@ __weak void BSP_AUDIO_IN_ClockConfig(I2S_HandleTypeDef *hi2s, uint32_t AudioFreq
         rccclkinit.PLLI2S.PLLI2SR = 6;
         HAL_RCCEx_PeriphCLKConfig(&rccclkinit);
     }
-    else
-    {
+    else {
         /* Other Frequency (11.025/22.500/44.100) */
         /* PLLI2S_VCO Output = PLLI2S_VCO Input * PLLI2SN = 290 Mhz */
         /* I2SCLK = PLLI2S_VCO Output/PLLI2SR = 290/2 = 145 Mhz */
@@ -890,13 +890,15 @@ __weak void BSP_AUDIO_IN_ClockConfig(I2S_HandleTypeDef *hi2s, uint32_t AudioFreq
     }
 }
 
+
 /**
   * @brief  BSP AUDIO IN MSP Init.
   * @param  hi2s: I2S handle
   * @param  Params : pointer on additional configuration parameters, can be NULL.
   */
-__weak void BSP_AUDIO_IN_MspInit(I2S_HandleTypeDef *hi2s, void *Params)
-{
+__weak void
+BSP_AUDIO_IN_MspInit(I2S_HandleTypeDef *hi2s, void *Params) {
+    UNUSED(Params);
     static DMA_HandleTypeDef hdma_i2sRx;
     GPIO_InitTypeDef  GPIO_InitStruct;
 
@@ -923,8 +925,7 @@ __weak void BSP_AUDIO_IN_MspInit(I2S_HandleTypeDef *hi2s, void *Params)
     /* Enable the DMA clock */
     I2S2_DMAx_CLK_ENABLE();
     
-    if(hi2s->Instance == I2S2)
-    {
+    if(hi2s->Instance == I2S2) {
         /* Configure the hdma_i2sRx handle parameters */
         hdma_i2sRx.Init.Channel             = I2S2_DMAx_CHANNEL;
         hdma_i2sRx.Init.Direction           = DMA_PERIPH_TO_MEMORY;
@@ -956,20 +957,21 @@ __weak void BSP_AUDIO_IN_MspInit(I2S_HandleTypeDef *hi2s, void *Params)
     HAL_NVIC_EnableIRQ(I2S2_DMAx_IRQ);
 }
 
+
 /**
   * @brief  DeInitializes BSP_AUDIO_IN MSP.
   * @param  hi2s: I2S handle
   * @param  Params : pointer on additional configuration parameters, can be NULL.
   */
-__weak void BSP_AUDIO_IN_MspDeInit(I2S_HandleTypeDef *hi2s, void *Params)
-{
+__weak void
+BSP_AUDIO_IN_MspDeInit(I2S_HandleTypeDef *hi2s, void *Params) {
+    UNUSED(Params);
     GPIO_InitTypeDef  gpio_init_structure;
 
     /* I2S DMA IRQ Channel deactivation */
     HAL_NVIC_DisableIRQ(I2S2_DMAx_IRQ);
 
-    if(hi2s->Instance == I2S2)
-    {
+    if(hi2s->Instance == I2S2) {
         /* Deinitialize the Stream for new transfer */
         HAL_DMA_DeInit(hi2s->hdmarx);
     }
@@ -990,34 +992,38 @@ __weak void BSP_AUDIO_IN_MspDeInit(I2S_HandleTypeDef *hi2s, void *Params)
      by surcgarging this __weak function */
 }
 
+
 /**
   * @brief  User callback when record buffer is filled.
   */
-__weak void BSP_AUDIO_IN_TransferComplete_CallBack(void)
-{
+__weak void
+BSP_AUDIO_IN_TransferComplete_CallBack(void) {
     /* This function should be implemented by the user application.
      It is called into this driver when the current buffer is filled
      to prepare the next buffer pointer and its size. */
 }
+
 
 /**
   * @brief  Manages the DMA Half Transfer complete event.
   */
-__weak void BSP_AUDIO_IN_HalfTransfer_CallBack(void)
-{
+__weak void
+BSP_AUDIO_IN_HalfTransfer_CallBack(void) {
     /* This function should be implemented by the user application.
      It is called into this driver when the current buffer is filled
      to prepare the next buffer pointer and its size. */
 }
 
+
 /**
   * @brief  Audio IN Error callback function.
   */
-__weak void BSP_AUDIO_IN_Error_Callback(void)
-{   
+__weak void
+BSP_AUDIO_IN_Error_Callback(void) {
     /* This function is called when an Interrupt due to transfer error on or peripheral
      error occurs. */
 }
+
 
 /*******************************************************************************
                             Static Functions
@@ -1030,15 +1036,14 @@ __weak void BSP_AUDIO_IN_Error_Callback(void)
   * @param  ChnlNbrOut: Number of desired output audio channels in the  resulting PCM buffer
   *         Number of audio channels (1: mono; 2: stereo)
   */
-static void PDMDecoder_Init(uint32_t AudioFreq, uint32_t ChnlNbrIn, uint32_t ChnlNbrOut)
-{
+static void
+PDMDecoder_Init(uint32_t AudioFreq, uint32_t ChnlNbrIn, uint32_t ChnlNbrOut) {
     uint32_t index = 0;
 
     /* Enable CRC peripheral to unlock the PDM library */
     __HAL_RCC_CRC_CLK_ENABLE();
 
-    for(index = 0; index < ChnlNbrIn; index++)
-    {
+    for(index = 0; index < ChnlNbrIn; index++) {
         /* Init PDM filters */
         PDM_FilterHandler[index].bit_order  = PDM_FILTER_BIT_ORDER_LSB;
         PDM_FilterHandler[index].endianness = PDM_FILTER_ENDIANNESS_LE;
@@ -1055,6 +1060,7 @@ static void PDMDecoder_Init(uint32_t AudioFreq, uint32_t ChnlNbrIn, uint32_t Chn
     }
 }
 
+
 /**
   * @brief  Initializes the Audio Codec audio interface (I2S)
   * @note   This function assumes that the I2S input clock (through PLL_R in
@@ -1062,8 +1068,8 @@ static void PDMDecoder_Init(uint32_t AudioFreq, uint32_t ChnlNbrIn, uint32_t Chn
   *         is already configured and ready to be used.
   * @param  AudioFreq: Audio frequency to be configured for the I2S peripheral.
   */
-static uint8_t I2S2_Init(uint32_t AudioFreq)
-{
+static uint8_t
+I2S2_Init(uint32_t AudioFreq) {
     /* Initialize the hAudioInI2s Instance parameter */
     hAudioInI2s.Instance          = I2S2;
 
@@ -1080,15 +1086,14 @@ static uint8_t I2S2_Init(uint32_t AudioFreq)
     hAudioInI2s.Init.Standard     = I2S_STANDARD_LSB;
 
     /* Initialize the I2S peripheral with the structure above */
-    if(HAL_I2S_Init(&hAudioInI2s) != HAL_OK)
-    {
+    if(HAL_I2S_Init(&hAudioInI2s) != HAL_OK) {
         return AUDIO_ERROR;
     }
-    else
-    {
+    else {
         return AUDIO_OK;
     }
 }  
+
 
 /**
   * @}
@@ -1102,19 +1107,18 @@ static uint8_t I2S2_Init(uint32_t AudioFreq)
   * @brief  I2S error callbacks.
   * @param  hi2s: I2S handle
   */
-void HAL_I2S_ErrorCallback(I2S_HandleTypeDef *hi2s)
-{
+void
+HAL_I2S_ErrorCallback(I2S_HandleTypeDef *hi2s) {
     /* Manage the error generated on DMA FIFO: This function
      should be coded by user (its prototype is already declared in stm32f4_discovery_audio.h) */
-    if(hi2s->Instance == I2S3)
-    {
+    if(hi2s->Instance == I2S3) {
         BSP_AUDIO_OUT_Error_CallBack();
     }
-    if(hi2s->Instance == I2S2)
-    {
+    if(hi2s->Instance == I2S2) {
         BSP_AUDIO_IN_Error_Callback();
     }
 }
+
 
 /**
   * @}
