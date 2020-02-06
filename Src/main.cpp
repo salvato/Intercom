@@ -173,6 +173,8 @@ char buf[255];
 
 TIM_HandleTypeDef  Tim2Handle;
 ADC_HandleTypeDef  hAdc;
+USBH_HandleTypeDef hUSB_Host; // USB Host handle
+extern HCD_HandleTypeDef hhcd; // defined in usbh_conf.c
 
 
 // nRF Addresses
@@ -230,6 +232,7 @@ __IO uint32_t startConnectTime;
 typedef enum {
     connectRequest = 0x10,
     connectionAccepted,
+    connectionTimedOut,
     suspendCmd,
     suspendAck
 } Commands;
@@ -238,21 +241,15 @@ typedef enum {
 #define MAX_CONNECTION_TIME  15000
 #define QUERY_INTERVAL       300
 
-
-
-
 /* State Machine for the USBH_USR_ApplicationState */
 #define USBH_USR_FS_INIT    ((uint8_t)0x00)
 #define USBH_USR_AUDIO      ((uint8_t)0x01)
 
 FATFS USBDISKFatFs;          /* File system object for USB disk logical drive */
 char USBDISKPath[4];         /* USB Host logical drive path */
-USBH_HandleTypeDef hUSB_Host; /* USB Host handle */
 
 MSC_ApplicationTypeDef AppliState = APPLICATION_START;//APPLICATION_IDLE;
 static uint8_t  USBH_USR_ApplicationState = USBH_USR_FS_INIT;
-
-extern HCD_HandleTypeDef hhcd; // defined in usbh_conf.c
 
 /* Re-play Wave file status on/off. Defined as external in waveplayer.c file */
 __IO uint32_t RepeatState = REPEAT_ON;
@@ -266,6 +263,7 @@ __IO uint32_t PressCount = 0;
 __IO uint32_t CmdIndex = CMD_PLAY;
 
 extern __IO BUFFER_StateTypeDef buffer_offset;
+
 
 void
 USBH_UserProcess (USBH_HandleTypeDef *pHost, uint8_t vId) {
@@ -328,12 +326,6 @@ MSC_Application(void) {
         default:
             break;
     }
-}
-
-
-void
-OTG_FS_IRQHandler(void) {
-  HAL_HCD_IRQHandler(&hhcd);
 }
 
 
@@ -805,9 +797,14 @@ Init_TIM2_Adc(void) {
 
 
 // extern "C" {
-// Probabilmente questa routine di interrupt dura troppo tempo:
-// forse sarebbe meglio settare alcuni flags e lasciare che il
-// lavoro lungo venga svolto all'esterno: TO DO LATER...
+
+
+void
+OTG_FS_IRQHandler(void) {
+  HAL_HCD_IRQHandler(&hhcd);
+}
+
+
 void
 EXTI15_10_IRQHandler(void) { // We received a radio interrupt...
     // Read & reset the IRQ status
