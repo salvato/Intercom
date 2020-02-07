@@ -270,6 +270,7 @@ void
 USBH_UserProcess (USBH_HandleTypeDef *pHost, uint8_t vId) {
     UNUSED(pHost);
     switch (vId) {
+
         case HOST_USER_SELECT_CONFIGURATION:
             break;
 
@@ -288,6 +289,7 @@ USBH_UserProcess (USBH_HandleTypeDef *pHost, uint8_t vId) {
 
         default:
             break;
+
     }
 }
 
