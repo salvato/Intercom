@@ -150,7 +150,7 @@ WavePlayerInit(uint32_t AudioFreq) {
     return(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, AudioFreq));
 }
 
-
+#define WAVE_NAME "0:audio_sample.wav"
 void
 WavePlayerStart(void) {
     UINT bytesread = 0;

@@ -229,6 +229,16 @@ __IO bool bSuspend;      // true if the Remote ask to suspend the connection
 __IO bool bRadioDataAvailable;
 __IO uint32_t startConnectTime;
 
+__IO uint32_t AudioRemSize;
+
+UINT bytesread = 0;
+TCHAR path[] = "0:/";
+TCHAR wavefilename[] = "0:audio_sample.wav";
+WAVE_FormatTypeDef waveformat;
+FIL FileRead;
+DIR Directory;
+uint32_t WaveDataLength = 0;
+
 
 // Commands
 typedef enum {
@@ -251,7 +261,6 @@ FATFS USBDISKFatFs;          /* File system object for USB disk logical drive */
 char USBDISKPath[4];         /* USB Host logical drive path */
 
 MSC_ApplicationTypeDef AppliState = APPLICATION_IDLE;
-static uint8_t  USBH_USR_ApplicationState = USBH_USR_FS_INIT;
 
 /* Re-play Wave file status on/off. Defined as external in waveplayer.c file */
 __IO uint32_t RepeatState = REPEAT_ON;
@@ -295,44 +304,6 @@ USBH_UserProcess (USBH_HandleTypeDef *pHost, uint8_t vId) {
 }
 
 
-
-void
-COMMAND_AudioExecuteApplication(void) {
-    /* Execute the command switch the command index */
-    switch (CmdIndex) {
-        /* Start Playing from USB Flash memory */
-        case CMD_PLAY:
-            if (RepeatState == REPEAT_ON)
-                WavePlayerStart();
-            break;
-        default:
-            break;
-    }
-}
-
-
-void
-MSC_Application(void) {
-    switch(USBH_USR_ApplicationState) {
-        case USBH_USR_AUDIO:
-            COMMAND_AudioExecuteApplication(); // Go to Audio menu
-            USBH_USR_ApplicationState = USBH_USR_FS_INIT; // Set user initialization flag
-            break;
-
-        case USBH_USR_FS_INIT:
-            // Initializes the File System
-            if(f_mount(&USBDISKFatFs, (TCHAR const*)USBDISKPath, 0 ) != FR_OK ) {
-                Error_Handler();
-            }
-            USBH_USR_ApplicationState = USBH_USR_AUDIO; // Go to menu
-            break;
-
-        default:
-            break;
-    }
-}
-
-
 int
 main(void) {
     const uint8_t Channel = 76;
@@ -341,13 +312,6 @@ main(void) {
     HAL_Init();
     initLeds();
     SystemClock_Config();
-    if(FATFS_LinkDriver(&USBH_Driver, USBDISKPath) != 0) {
-        Error_Handler();
-    }
-    USBH_Init(&hUSB_Host, USBH_UserProcess, 0);// Init Host Library
-    USBH_RegisterClass(&hUSB_Host, USBH_MSC_CLASS);// Add Supported Class
-    USBH_Start(&hUSB_Host);// Start Host Process
-
     // Are we Base or Remote ?
     InitConfigPin();
     isBaseStation = HAL_GPIO_ReadPin(CONFIGURE_PORT, CONFIGURE_PIN);
@@ -364,6 +328,12 @@ main(void) {
             processBase();
         }
         else {
+            USBH_Init(&hUSB_Host, USBH_UserProcess, 0);// Init Host Library
+            USBH_RegisterClass(&hUSB_Host, USBH_MSC_CLASS);// Add Supported Class
+            USBH_Start(&hUSB_Host);// Start Host Process
+            if(FATFS_LinkDriver(&USBH_Driver, USBDISKPath) != 0) {
+                Error_Handler();
+            }
             connectRemote();// We will be woken up by receiving a command
             processRemote();
         }
@@ -398,18 +368,64 @@ connectRemote() {
             BSP_LED_Off(LED_BLUE);
             if(rxBuffer[0] == connectRequest) {
                 bConnectionRequested = true;
-                buffer_offset = BUFFER_OFFSET_NONE;
-                // Link the USB Host disk I/O
                 bConnectionTimedOut = false;
-                while(!bConnectionAccepted && !bConnectionTimedOut) {
-                    switch(AppliState) {
-                        case APPLICATION_START:
-                            MSC_Application();
-                            break;
-                        case APPLICATION_IDLE:
-                        default:
-                            break;
+                buffer_offset = BUFFER_OFFSET_NONE;
+
+                // Initializes the File System
+                if(f_mount(&USBDISKFatFs, (TCHAR const*)USBDISKPath, 0 ) != FR_OK ) {
+                    Error_Handler();
+                }
+
+                if(f_opendir(&Directory, path) == FR_OK) {
+                    if(f_open(&FileRead, wavefilename , FA_READ) != FR_OK) {
+                        BSP_LED_On(LED5);
+                        Error_Handler();
                     }
+                    else {
+                        f_read (&FileRead, &waveformat, sizeof(waveformat), &bytesread);
+                        WaveDataLength = waveformat.FileSize;
+                    }
+                }
+                if(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, waveformat.SampleRate) != AUDIO_OK)
+                    Error_Handler();
+                if(Audio_Buffer != NULL) {
+                    free(Audio_Buffer);
+                    Audio_Buffer = NULL;
+                }
+                Audio_Buffer = (uint8_t*)malloc(AUDIO_BUFFER_SIZE*sizeof(*Audio_Buffer));
+                f_lseek(&FileRead, 0);
+                f_read (&FileRead, &Audio_Buffer[0], AUDIO_BUFFER_SIZE, &bytesread);
+                AudioRemSize = WaveDataLength - bytesread;
+                BSP_AUDIO_OUT_Play((uint16_t*)&Audio_Buffer[0], AUDIO_BUFFER_SIZE);
+
+                while((AudioRemSize != 0) &&
+                      !bConnectionAccepted &&
+                      !bConnectionTimedOut)
+                {
+                    bytesread = 0;
+                    if(buffer_offset == BUFFER_OFFSET_HALF) {
+                        f_read(&FileRead,
+                               &Audio_Buffer[0],
+                               AUDIO_BUFFER_SIZE/2,
+                               (UINT *)&bytesread);
+                        buffer_offset = BUFFER_OFFSET_NONE;
+                    }
+
+                    if(buffer_offset == BUFFER_OFFSET_FULL) {
+                        f_read(&FileRead,
+                               &Audio_Buffer[AUDIO_BUFFER_SIZE/2],
+                               AUDIO_BUFFER_SIZE/2,
+                               (UINT *)&bytesread);
+
+                        buffer_offset = BUFFER_OFFSET_NONE;
+                    }
+                    if(AudioRemSize > (AUDIO_BUFFER_SIZE / 2)) {
+                        AudioRemSize -= bytesread;
+                    }
+                    else {
+                        AudioRemSize = 0;
+                    }
+
                     USBH_Process(&hUSB_Host); // USBH_Background Process
                     if(bRadioDataAvailable) {
                         bRadioDataAvailable = false;
