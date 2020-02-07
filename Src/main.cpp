@@ -224,6 +224,7 @@ __IO bool bReady2Play;
 __IO bool bBaseSleeping;
 __IO bool bConnectionRequested;
 __IO bool bConnectionAccepted;
+bool bConnectionTimedOut;
 __IO bool bSuspend;      // true if the Remote ask to suspend the connection
 __IO bool bRadioDataAvailable;
 __IO uint32_t startConnectTime;
@@ -290,7 +291,7 @@ USBH_UserProcess (USBH_HandleTypeDef *pHost, uint8_t vId) {
         default:
             break;
 
-    }
+    } // switch (vId)g
 }
 
 
@@ -383,7 +384,7 @@ connectRemote() {
     bConnectionRequested  = false;
     setRole(PRX);
     rf24.flush_rx();
-    rf24.setRetries(5, 15);//We don't need to bo very fast but reliable
+    rf24.setRetries(5, 15);//We don't need to be very fast but reliable
 
     while(!bRemoteConnected) {
         AppliState = APPLICATION_IDLE;
@@ -399,7 +400,8 @@ connectRemote() {
                 bConnectionRequested = true;
                 buffer_offset = BUFFER_OFFSET_NONE;
                 // Link the USB Host disk I/O
-                while(!bConnectionAccepted) {
+                bConnectionTimedOut = false;
+                while(!bConnectionAccepted && !bConnectionTimedOut) {
                     switch(AppliState) {
                         case APPLICATION_START:
                             MSC_Application();
@@ -409,30 +411,38 @@ connectRemote() {
                             break;
                     }
                     USBH_Process(&hUSB_Host); // USBH_Background Process
-                }
-                rf24.flush_rx();
-                bRadioDataAvailable = false;
-                startConnectTime = HAL_GetTick();
-                uint32_t elapsed = 0;
-                do {
                     if(bRadioDataAvailable) {
                         bRadioDataAvailable = false;
+                        BSP_LED_Toggle(LED_BLUE);
                         rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
-                        if(rxBuffer[0] == connectRequest) { // Base is still asking for connection
-                            txBuffer[0] = connectionAccepted;
-                            BSP_LED_On(LED_ORANGE);
-                            rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
-                            BSP_LED_Off(LED_ORANGE);
-                            bRemoteConnected = true;
-                            delayMicroseconds(6*250); // Give nRF24 time to transmit before
-                                                      // changing role from PRX to PTX
-                        }
-                        else if(rxBuffer[0] == connectionTimedOut) {
-                            break;
+                        if(rxBuffer[0] == connectionTimedOut) {
+                            bConnectionTimedOut = true;
+                            CmdIndex = CMD_STOP; // Ask to stop the Alarm Sound
                         }
                     }
-                    elapsed = HAL_GetTick()-startConnectTime;
-                } while(!bRemoteConnected || (elapsed < 5000));
+                }
+                if(!bConnectionTimedOut) {
+                    rf24.flush_rx();
+                    bRadioDataAvailable = false;
+                    startConnectTime = HAL_GetTick();
+                    uint32_t elapsed = 0;
+                    do {
+                        if(bRadioDataAvailable) {
+                            bRadioDataAvailable = false;
+                            rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
+                            if(rxBuffer[0] == connectRequest) { // Base is still asking for connection
+                                txBuffer[0] = connectionAccepted;
+                                BSP_LED_On(LED_ORANGE);
+                                rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
+                                BSP_LED_Off(LED_ORANGE);
+                                bRemoteConnected = true;
+                                delayMicroseconds(6*250*15); // Give nRF24 time to transmit before
+                                                          // changing role from PRX to PTX
+                            }
+                        }
+                        elapsed = HAL_GetTick()-startConnectTime;
+                    } while(!bRemoteConnected || (elapsed < 5000));
+                }
             } // if(bRadioDataAvailable)
         }
         BSP_LED_Off(LED_RED);
@@ -469,6 +479,7 @@ connectBase() {
         do {
             if(HAL_GetTick()-t0 > QUERY_INTERVAL) {
                 t0 = HAL_GetTick();
+                rf24.flush_tx();
                 txBuffer[0] = connectRequest;
                 BSP_LED_On(LED_BLUE);
                 rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
@@ -482,7 +493,7 @@ connectBase() {
                 BSP_LED_Off(LED_ORANGE); // Reading done
                 if(rxBuffer[0] == connectionAccepted) {
                     bBaseConnected = true;
-                    delayMicroseconds(6*250); // Give nRF24 time to transmit and wait for ACK
+                    delayMicroseconds(6*250*15); // Give nRF24 time to transmit and wait for ACK
                                                  // before changing role from PTX to PRX
                 }
             }
@@ -491,10 +502,13 @@ connectBase() {
 
         ledsOff();
         if(!bBaseConnected) {
-            txBuffer[0] = connectionTimedOut;
             BSP_LED_On(LED_BLUE);
+            rf24.flush_tx();
+            txBuffer[0] = connectionTimedOut;
             rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
             rf24.startWrite();
+            delayMicroseconds(6*250*15); // Give nRF24 time to transmit and wait for ACK
+                                         // before changing role from PTX to PRX
             BSP_LED_Off(LED_BLUE);
         }
     } while(!bBaseConnected);
