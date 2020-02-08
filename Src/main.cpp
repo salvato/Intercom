@@ -457,8 +457,7 @@ connectRemote() {
                                 rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
                                 BSP_LED_Off(LED_ORANGE);
                                 bRemoteConnected = true;
-                                HAL_Delay(300); // Give nRF24 time to transmit before
-                                                 // changing role from PRX to PTX
+                                HAL_Delay(300); // Needed for unknown reasons...
                             }
                         }
                         elapsed = HAL_GetTick()-startConnectTime;
@@ -495,7 +494,7 @@ connectBase() {
 
         // An external event has been detected: try to connect to a Remote !
         startConnectTime = HAL_GetTick();
-        uint32_t t0      = startConnectTime-2000;
+        uint32_t t0      = startConnectTime-2000; // Just to start the first request.
         uint32_t elapsed = 0;
         do {
             if(HAL_GetTick()-t0 > QUERY_INTERVAL) {
@@ -513,8 +512,7 @@ connectBase() {
                 BSP_LED_Off(LED_ORANGE); // Reading done
                 if(rxBuffer[0] == connectionAccepted) {
                     bBaseConnected = true;
-                    delayMicroseconds(6*250); // Give nRF24 time to transmit and wait for ACK
-                                                 // before changing role from PTX to PRX
+                    HAL_Delay(50);
                 }
             }
             elapsed = HAL_GetTick()-startConnectTime;
@@ -568,7 +566,7 @@ processBase() {
                     txBuffer[0] = suspendAck;
                     bSuspend = true;
                     rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
-                    delayMicroseconds(6*250);
+                    HAL_Delay(300);
                 }
             }
             else { // The packet contains Audio Data: first send our audio data...
@@ -646,7 +644,7 @@ processRemote() {
     txBuffer[0] = suspendCmd;
     rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
     rf24.startWrite();
-    delayMicroseconds(6*250); // To let the data be transmitted
+    HAL_Delay(50); // To let the data be transmitted
     BSP_LED_Off(LED_BLUE);
 }
 
