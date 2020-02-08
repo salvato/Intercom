@@ -31,7 +31,6 @@
 //-------------------------------------------------------------------------------
 
 
-
 //===============================================================
 //                 Used Resources
 //===============================================================
@@ -128,6 +127,44 @@
 
 
 //===============================================================
+//                 Push Buttons
+//===============================================================
+// PA0      Phone Push Button
+// PA2      Gate Push Button
+// PA3      Car Gate Push Button
+//===============================================================
+#define PHONE_BUTTON_CLK_ENABLE()       __HAL_RCC_GPIOA_CLK_ENABLE();
+#define PHONE_BUTTON_GPIO_PORT          GPIOA
+#define PHONE_BUTTON_GPIO_PIN           GPIO_PIN_0
+#define PHONE_BUTTON_IRQ                EXTI0_IRQn
+//---------------------------------------------------------------
+#define GATE_BUTTON_CLK_ENABLE()       __HAL_RCC_GPIOA_CLK_ENABLE();
+#define GATE_BUTTON_GPIO_PORT          GPIOA
+#define GATE_BUTTON_GPIO_PIN           GPIO_PIN_2
+#define GATE_BUTTON_IRQ                EXTI2_IRQn
+//---------------------------------------------------------------
+#define CAR_GATE_BUTTON_CLK_ENABLE()    __HAL_RCC_GPIOA_CLK_ENABLE();
+#define CAR_GATE_BUTTON_GPIO_PORT       GPIOA
+#define CAR_GATE_BUTTON_GPIO_PIN        GPIO_PIN_3
+#define CAR_GATE_BUTTON_IRQ             EXTI3_IRQn
+
+
+//===============================================================
+//                     Relays
+//===============================================================
+// PA2      Gate Relay
+// PA3      Car Gate Relay
+//===============================================================
+#define GATE_RELAY_CLK_ENABLE()         __HAL_RCC_GPIOA_CLK_ENABLE();
+#define GATE_RELAY_GPIO_PORT            GPIOA
+#define GATE_RELAY_GPIO_PIN             GPIO_PIN_2
+//---------------------------------------------------------------
+#define CAR_GATE_RELAY_CLK_ENABLE()     __HAL_RCC_GPIOA_CLK_ENABLE();
+#define CAR_GATE_RELAY_GPIO_PORT        GPIOA
+#define CAR_GATE_RELAY_GPIO_PIN         GPIO_PIN_3
+
+
+//===============================================================
 //                 LEDs by Colours
 //===============================================================
 #define LED_ORANGE  LED3
@@ -149,7 +186,7 @@
 #define RADIO_IN_IRQ_PREPRIO            0x0F
 
 
-#define MAX_CONNECTION_TIME  15000
+#define MAX_CONNECTION_TIME  60000
 #define QUERY_INTERVAL       300
 
 // State Machine for the USBH_USR_ApplicationState
@@ -162,6 +199,8 @@
 //===============================================================
 static void SystemClock_Config(void);
 static void InitConfigPin();
+static void PushButton_Init(GPIO_TypeDef* Port, uint32_t Pin, IRQn_Type Irq);
+static void Relay_Init(GPIO_TypeDef* Port, uint32_t Pin);
 static void initLeds();
 static void InitADC();
 static void Init_TIM2_Adc(void);
@@ -241,6 +280,7 @@ __IO bool bRadioIrq;
 __IO bool bReady2Send;
 __IO bool bReady2Play;
 __IO bool bBaseSleeping;
+
 __IO bool bConnectionRequested;
 __IO bool bConnectionAccepted;
      bool bConnectionTimedOut;
@@ -257,7 +297,11 @@ typedef enum {
     connectionAccepted,
     connectionTimedOut,
     suspendCmd,
-    suspendAck
+    suspendAck,
+    openGateCmd,
+    openGateAck,
+    openCarGateCmd,
+    openCarGateAck
 } Commands;
 
 
@@ -286,8 +330,22 @@ main(void) {
             Error_Handler();
     }
     initBuffers(isBaseStation);
-    // Init Push Button(s)
-    BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_EXTI);
+
+    // Init Push Buttons and Relays
+    PHONE_BUTTON_CLK_ENABLE();
+    PushButton_Init(PHONE_BUTTON_GPIO_PORT, PHONE_BUTTON_GPIO_PIN, PHONE_BUTTON_IRQ);
+    if(isBaseStation) {
+        GATE_RELAY_CLK_ENABLE();
+        Relay_Init(GATE_RELAY_GPIO_PORT, GATE_RELAY_GPIO_PIN);
+        CAR_GATE_RELAY_CLK_ENABLE();
+        Relay_Init(CAR_GATE_RELAY_GPIO_PORT, CAR_GATE_RELAY_GPIO_PIN);
+    }
+    else {
+        GATE_BUTTON_CLK_ENABLE();
+        PushButton_Init(GATE_BUTTON_GPIO_PORT, GATE_BUTTON_GPIO_PIN, GATE_BUTTON_IRQ);
+        CAR_GATE_BUTTON_CLK_ENABLE();
+        PushButton_Init(CAR_GATE_BUTTON_GPIO_PORT, CAR_GATE_BUTTON_GPIO_PIN, CAR_GATE_BUTTON_IRQ);
+    }
     if(!rf24.begin(Channel, RADIO_IN_IRQ_PREPRIO)) Error_Handler();
     rf24.clearInterrupts();// Avoid false interrupts from Radio
     rf24.maskIRQ(false, false, false);
@@ -309,31 +367,23 @@ USBH_UserProcess (USBH_HandleTypeDef *pHost, uint8_t vId) {
     UNUSED(pHost);
 
     switch(vId) {
-
         case HOST_USER_SELECT_CONFIGURATION:
             break;
-
         case HOST_USER_DISCONNECTION:
             AppliState = APPLICATION_IDLE;
             f_mount(NULL, (TCHAR const*)"", 0);
             break;
-
         case HOST_USER_CLASS_ACTIVE:
             AppliState = APPLICATION_START;
             break;
-
         case HOST_USER_CONNECTION:
             break;
-
         case HOST_USER_CLASS_SELECTED:
             break;
-
         case HOST_USER_UNRECOVERED_ERROR:
             break;
-
         default: // No other cases at present !
             break;
-
     } //switch(vId)
 }
 
@@ -356,6 +406,65 @@ prepareFileSystem() {
     if(f_opendir(&Directory, path) != FR_OK) return false;
     USBH_USR_ApplicationState = USBH_USR_AUDIO;
     return true;
+}
+
+
+// The Base, once being woken up by a button press,
+// send a "Connection Request" to the Remote and waits for
+// a "Connection Accepted" message within a given time.
+// If the "Connection Accepted" is received the Base assumes that
+// a Remote is ready to talk otherwise the Base send a message
+// when it gives up and returns sleeping.
+void
+connectBase() {
+    setRole(PTX);
+    rf24.flush_tx();
+    // At first we don't need to be very fast but reliable
+    rf24.setRetries(5, 15);
+    bool bBaseConnected;
+
+    do {
+        bBaseConnected = false;
+        bBaseSleeping = true;
+        // We will be woken up only by a button press
+        while(bBaseSleeping) {
+        }
+
+        // An external event has been detected: try to connect to a Remote !
+        startConnectTime = HAL_GetTick();
+        uint32_t t0      = startConnectTime-2000; // Just to start the first request.
+        uint32_t elapsed = 0;
+        do {
+            if(HAL_GetTick()-t0 > QUERY_INTERVAL) {
+                t0 = HAL_GetTick();
+                txBuffer[0] = connectRequest;
+                BSP_LED_On(LED_BLUE);
+                rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+                rf24.startWrite();
+                BSP_LED_Off(LED_BLUE);
+            }
+            if(bRadioDataAvailable) {
+                bRadioDataAvailable = false;
+                BSP_LED_On(LED_ORANGE); // Signal the packet's start reading
+                rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
+                BSP_LED_Off(LED_ORANGE); // Reading done
+                if(rxBuffer[0] == connectionAccepted) {
+                    bBaseConnected = true;
+                    HAL_Delay(50);
+                }
+            }
+            elapsed = HAL_GetTick()-startConnectTime;
+        } while(!bBaseConnected && (elapsed < MAX_CONNECTION_TIME));
+
+        ledsOff();
+        if(!bBaseConnected) {
+            txBuffer[0] = connectionTimedOut;
+            BSP_LED_On(LED_BLUE);
+            rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+            rf24.startWrite();
+            BSP_LED_Off(LED_BLUE);
+        }
+    } while(!bBaseConnected);
 }
 
 
@@ -471,72 +580,10 @@ connectRemote() {
 }
 
 
-// The Base, once being woken up by a button press,
-// send a "Connection Request" to the Remote and waits for
-// a "Connection Accepted" message within a given time.
-// If the "Connection Accepted" is received the Base assumes that
-// a Remote is ready to talk otherwise the Base send a message
-// when it gives up and returns sleeping.
-void
-connectBase() {
-    setRole(PTX);
-    rf24.flush_tx();
-    // At first we don't need to be very fast but reliable
-    rf24.setRetries(5, 15);
-    bool bBaseConnected;
-
-    do {
-        bBaseConnected = false;
-        bBaseSleeping = true;
-        // We will be woken up only by a button press
-        while(bBaseSleeping) {
-        }
-
-        // An external event has been detected: try to connect to a Remote !
-        startConnectTime = HAL_GetTick();
-        uint32_t t0      = startConnectTime-2000; // Just to start the first request.
-        uint32_t elapsed = 0;
-        do {
-            if(HAL_GetTick()-t0 > QUERY_INTERVAL) {
-                t0 = HAL_GetTick();
-                txBuffer[0] = connectRequest;
-                BSP_LED_On(LED_BLUE);
-                rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-                rf24.startWrite();
-                BSP_LED_Off(LED_BLUE);
-            }
-            if(bRadioDataAvailable) {
-                bRadioDataAvailable = false;
-                BSP_LED_On(LED_ORANGE); // Signal the packet's start reading
-                rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
-                BSP_LED_Off(LED_ORANGE); // Reading done
-                if(rxBuffer[0] == connectionAccepted) {
-                    bBaseConnected = true;
-                    HAL_Delay(50);
-                }
-            }
-            elapsed = HAL_GetTick()-startConnectTime;
-        } while(!bBaseConnected && (elapsed < MAX_CONNECTION_TIME));
-
-        ledsOff();
-        if(!bBaseConnected) {
-            txBuffer[0] = connectionTimedOut;
-            BSP_LED_On(LED_BLUE);
-            rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-            rf24.startWrite();
-            BSP_LED_Off(LED_BLUE);
-        }
-    } while(!bBaseConnected);
-}
-
-
 void
 processBase() {
-    if(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO,
-                          Volume,
-                          DEFAULT_AUDIO_IN_FREQ) != AUDIO_OK)
-        Error_Handler();
     uint8_t pipe_num;
+    BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
     setRole(PRX); // Change role from PTX to PRX...
     rf24.flush_rx();
     rf24.setRetries(1, 0); // We have to be fast !!!
@@ -593,10 +640,7 @@ processBase() {
 
 void
 processRemote() {
-    if(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO,
-                          Volume,
-                          DEFAULT_AUDIO_IN_FREQ) != AUDIO_OK)
-        Error_Handler();
+    BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
     setRole(PTX); // Change role from PRX to PTX...
     rf24.flush_tx();
     bReady2Send  = false;
@@ -656,6 +700,36 @@ ledsOff() {
     BSP_LED_Off(LED_BLUE);
     BSP_LED_Off(LED_RED);
 }
+
+
+void
+PushButton_Init(GPIO_TypeDef* Port, uint32_t Pin, IRQn_Type Irq) {
+    GPIO_InitTypeDef GPIO_InitStruct;
+
+    GPIO_InitStruct.Pin   = Pin;
+    GPIO_InitStruct.Pull  = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FAST;
+    GPIO_InitStruct.Mode  = GPIO_MODE_IT_RISING;
+    HAL_GPIO_Init(Port, &GPIO_InitStruct);
+
+    /* Enable and set Button EXTI Interrupt to the lowest priority */
+    HAL_NVIC_SetPriority(Irq, 0x0F, 0);
+    HAL_NVIC_EnableIRQ(Irq);
+}
+
+
+
+void
+Relay_Init(GPIO_TypeDef* Port, uint32_t Pin) {
+    GPIO_InitTypeDef GPIO_InitStruct;
+
+    GPIO_InitStruct.Pin   = Pin;
+    GPIO_InitStruct.Pull  = GPIO_PULLUP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FAST;
+    GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+    HAL_GPIO_Init(Port, &GPIO_InitStruct);
+}
+
 
 
 void
@@ -984,8 +1058,10 @@ HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi) {
 /// This function handles External line 0 interrupt request.
 void
 EXTI0_IRQHandler(void) {
-    if(isBaseStation)
+    if(isBaseStation) {
+        startConnectTime = HAL_GetTick();
         bBaseSleeping = false;
+    }
     else {
         if(bConnectionRequested) {
             bConnectionRequested = false;
