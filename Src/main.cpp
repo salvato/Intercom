@@ -424,6 +424,7 @@ connectBase() {
     bool bBaseConnected;
 
     do {
+        BSP_LED_On(LED_RED);
         bBaseConnected = false;
         bBaseSleeping = true;
         // We will be woken up only by a button press
@@ -465,6 +466,7 @@ connectBase() {
             BSP_LED_Off(LED_BLUE);
         }
     } while(!bBaseConnected);
+    BSP_LED_Off(LED_RED);
 }
 
 
@@ -684,12 +686,32 @@ processRemote() {
     BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio and switch off the codec
     rf24.openWritingPipe(pipes[2]);
     rf24.flush_rx();
-    BSP_LED_On(LED_BLUE);
-    txBuffer[0] = suspendCmd;
-    rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-    rf24.startWrite();
-    HAL_Delay(50); // To let the data be transmitted
-    BSP_LED_Off(LED_BLUE);
+
+    startConnectTime = HAL_GetTick();
+    uint32_t t0      = startConnectTime-2000; // Just to start the first request.
+    uint32_t elapsed = 0;
+    bool bBaseDisConnected = false;
+    do {
+        if(HAL_GetTick()-t0 > QUERY_INTERVAL) {
+            t0 = HAL_GetTick();
+            BSP_LED_On(LED_BLUE);
+            txBuffer[0] = suspendCmd;
+            rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+            rf24.startWrite();
+            BSP_LED_Off(LED_BLUE);
+        }
+        if(bRadioDataAvailable) {
+            bRadioDataAvailable = false;
+            BSP_LED_On(LED_ORANGE); // Signal the packet's start reading
+            rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
+            BSP_LED_Off(LED_ORANGE); // Reading done
+            if(rxBuffer[0] == suspendAck) {
+                bBaseDisConnected = true;
+                HAL_Delay(50);
+            }
+        }
+        elapsed = HAL_GetTick()-startConnectTime;
+    } while(!bBaseDisConnected && (elapsed < MAX_CONNECTION_TIME));
 }
 
 
