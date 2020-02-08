@@ -647,6 +647,7 @@ processRemote() {
     BSP_AUDIO_IN_Stop();               // Stop sending Audio Data
     BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio and switch off the codec
     rf24.openWritingPipe(pipes[2]);
+    rf24.setRetries(5, 15);
     rf24.flush_rx();
 
     startConnectTime = HAL_GetTick();
