@@ -73,7 +73,6 @@ void EXTI1_IRQHandler(void);
 void I2S3_IRQHandler(void);
 void I2S2_IRQHandler(void);
 void OTG_FS_IRQHandler(void);
-void USBH_UserProcess(USBH_HandleTypeDef *pHost, uint8_t vId);
 void COMMAND_AudioExecuteApplication(void);
 void MSC_Application(void);
 

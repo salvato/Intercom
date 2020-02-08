@@ -149,6 +149,14 @@
 #define RADIO_IN_IRQ_PREPRIO            0x0F
 
 
+#define MAX_CONNECTION_TIME  15000
+#define QUERY_INTERVAL       300
+
+// State Machine for the USBH_USR_ApplicationState
+#define USBH_USR_FS_INIT    ((uint8_t)0x00)
+#define USBH_USR_AUDIO      ((uint8_t)0x01)
+
+
 //===============================================================
 // Local Functions
 //===============================================================
@@ -164,6 +172,8 @@ static void connectBase();
 static void connectRemote();
 static void processBase();
 static void processRemote();
+static void USBH_UserProcess (USBH_HandleTypeDef *pHost, uint8_t vId);
+static bool prepareFileSystem();
 
 
 char buf[255];
@@ -232,7 +242,7 @@ __IO bool bReady2Send;
 __IO bool bReady2Play;
 __IO bool bBaseSleeping;
 __IO bool bConnectionRequested;
-     bool bConnectionAccepted;
+__IO bool bConnectionAccepted;
      bool bConnectionTimedOut;
 __IO bool bSuspend;      // true if the Remote ask to suspend the connection
 __IO bool bRadioDataAvailable;
@@ -251,18 +261,47 @@ typedef enum {
 } Commands;
 
 
-#define MAX_CONNECTION_TIME  15000
-#define QUERY_INTERVAL       300
-
-// State Machine for the USBH_USR_ApplicationState
-#define USBH_USR_FS_INIT    ((uint8_t)0x00)
-#define USBH_USR_AUDIO      ((uint8_t)0x01)
-
 FATFS USBDISKFatFs;          // File system object for USB disk logical drive
 char USBDISKPath[4];         // USB Host logical drive path
 
 MSC_ApplicationTypeDef AppliState = APPLICATION_IDLE;
 static uint8_t  USBH_USR_ApplicationState = USBH_USR_FS_INIT;
+
+
+int
+main(void) {
+    const uint8_t Channel = 76;
+    Volume = 70; // % of Max
+    // System startup
+    HAL_Init();
+    initLeds();
+    SystemClock_Config();
+    // Are we Base or Remote ?
+    InitConfigPin();
+    isBaseStation = HAL_GPIO_ReadPin(CONFIGURE_PORT, CONFIGURE_PIN);
+    // Initialize the corresponding things..
+    if(!isBaseStation) { // Prepare Wave file to Play
+        if(!prepareFileSystem())
+            // Here we should provide an alternative way to produce the Alarm Sound !
+            Error_Handler();
+    }
+    initBuffers(isBaseStation);
+    // Init Push Button(s)
+    BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_EXTI);
+    if(!rf24.begin(Channel, RADIO_IN_IRQ_PREPRIO)) Error_Handler();
+    rf24.clearInterrupts();// Avoid false interrupts from Radio
+    rf24.maskIRQ(false, false, false);
+    while(true) {
+        if(isBaseStation) {
+            connectBase();// We will be woken up by a button press
+            processBase();
+        }
+        else {
+            connectRemote();// We will be woken up by receiving a command
+            processRemote();
+        }
+    }
+}
 
 
 void
@@ -317,42 +356,6 @@ prepareFileSystem() {
     if(f_opendir(&Directory, path) != FR_OK) return false;
     USBH_USR_ApplicationState = USBH_USR_AUDIO;
     return true;
-}
-
-
-int
-main(void) {
-    const uint8_t Channel = 76;
-    Volume = 70; // % of Max
-    // System startup
-    HAL_Init();
-    initLeds();
-    SystemClock_Config();
-    // Are we Base or Remote ?
-    InitConfigPin();
-    isBaseStation = HAL_GPIO_ReadPin(CONFIGURE_PORT, CONFIGURE_PIN);
-    // Initialize the corresponding things..
-    if(!isBaseStation) { // Prepare Wave file to Play
-        if(!prepareFileSystem())
-            // Here we should provide an alternative way to produce the Alarm Sound !
-            Error_Handler();
-    }
-    initBuffers(isBaseStation);
-    // Init Push Button(s)
-    BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_EXTI);
-    if(!rf24.begin(Channel, RADIO_IN_IRQ_PREPRIO)) Error_Handler();
-    rf24.clearInterrupts();// Avoid false interrupts from Radio
-    rf24.maskIRQ(false, false, false);
-    while(true) {
-        if(isBaseStation) {
-            connectBase();// We will be woken up by a button press
-            processBase();
-        }
-        else {
-            connectRemote();// We will be woken up by receiving a command
-            processRemote();
-        }
-    }
 }
 
 
