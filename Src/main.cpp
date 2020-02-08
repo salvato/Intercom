@@ -214,7 +214,7 @@ static void processBase();
 static void processRemote();
 static void USBH_UserProcess (USBH_HandleTypeDef *pHost, uint8_t vId);
 static bool prepareFileSystem();
-
+static void startAlarm();;
 
 char buf[255];
 
@@ -497,26 +497,7 @@ connectRemote() {
             BSP_LED_Off(LED_BLUE);
             if(rxBuffer[0] == connectRequest) {
                 bConnectionRequested = true;
-                buffer_offset = BUFFER_OFFSET_NONE;
-                bytesread = 0;
-                WaveDataLength = 0;
-                AudioRemSize = 0;
-                if(f_open(&FileRead, WAVE_NAME , FA_READ) != FR_OK) {
-                    // Here we should provide an alternative way to produce the Alarm Sound
-                    Error_Handler();
-                }
-                // Read the wav file header
-                f_read (&FileRead, &waveformat, sizeof(waveformat), &bytesread);
-                WaveDataLength = waveformat.FileSize;
-                if(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, waveformat.SampleRate) != AUDIO_OK) {
-                    Error_Handler();
-                }
-                Audio_Buffer = (uint8_t*)malloc(AUDIO_BUFFER_SIZE*sizeof(*Audio_Buffer));
-                f_lseek(&FileRead, 0);
-                f_read (&FileRead, &Audio_Buffer[0], AUDIO_BUFFER_SIZE, &bytesread);
-                AudioRemSize = WaveDataLength - bytesread;
-                BSP_AUDIO_OUT_Play((uint16_t*)&Audio_Buffer[0], AUDIO_BUFFER_SIZE);
-
+                startAlarm();
                 while(!bConnectionAccepted &&
                       AudioRemSize != 0    &&
                       !bConnectionTimedOut)
@@ -569,7 +550,7 @@ connectRemote() {
                                 rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
                                 BSP_LED_Off(LED_ORANGE);
                                 bRemoteConnected = true;
-                                HAL_Delay(300); // Needed for unknown reasons...
+                                HAL_Delay(500); // Needed for unknown reasons...
                             }
                         }
                         elapsed = HAL_GetTick()-startConnectTime;
@@ -714,6 +695,30 @@ processRemote() {
         elapsed = HAL_GetTick()-startConnectTime;
     } while(!bBaseDisConnected && (elapsed < MAX_WAIT_ACK_TIME));
     ledsOff();
+}
+
+
+void
+startAlarm() {
+    buffer_offset = BUFFER_OFFSET_NONE;
+    bytesread = 0;
+    WaveDataLength = 0;
+    AudioRemSize = 0;
+    if(f_open(&FileRead, WAVE_NAME , FA_READ) != FR_OK) {
+        // Here we should provide an alternative way to produce the Alarm Sound
+        Error_Handler();
+    }
+    // Read the wav file header
+    f_read (&FileRead, &waveformat, sizeof(waveformat), &bytesread);
+    WaveDataLength = waveformat.FileSize;
+    if(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, waveformat.SampleRate) != AUDIO_OK) {
+        Error_Handler();
+    }
+    Audio_Buffer = (uint8_t*)malloc(AUDIO_BUFFER_SIZE*sizeof(*Audio_Buffer));
+    f_lseek(&FileRead, 0);
+    f_read (&FileRead, &Audio_Buffer[0], AUDIO_BUFFER_SIZE, &bytesread);
+    AudioRemSize = WaveDataLength - bytesread;
+    BSP_AUDIO_OUT_Play((uint16_t*)&Audio_Buffer[0], AUDIO_BUFFER_SIZE);
 }
 
 
