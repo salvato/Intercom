@@ -491,57 +491,56 @@ connectRemote() {
 
     while(!bRemoteConnected) {
         BSP_LED_On(LED_RED);
-        if(bRadioDataAvailable) {
-            bRadioDataAvailable  = false;
-            bConnectionRequested = false;
-            bConnectionTimedOut  = false;
-            BSP_LED_On(LED_BLUE);
-            rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
-            BSP_LED_Off(LED_BLUE);
-            if(rxBuffer[0] == connectRequest) {
-                bConnectionRequested = true;
-                startAlarm();
-                while(!bConnectionAccepted &&
-                      AudioRemSize != 0    &&
-                      !bConnectionTimedOut)
-                {
-                    if(!updateAlarm()) {
+        while(!bRadioDataAvailable) {
+        }
+        bRadioDataAvailable  = false;
+        bConnectionRequested = false;
+        bConnectionTimedOut  = false;
+        BSP_LED_On(LED_BLUE);
+        rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
+        BSP_LED_Off(LED_BLUE);
+        if(rxBuffer[0] == connectRequest) {
+            bConnectionRequested = true;
+            startAlarm();
+            while(!bConnectionAccepted &&
+                  AudioRemSize != 0    &&
+                  !bConnectionTimedOut)
+            {
+                if(!updateAlarm()) {
+                    bConnectionTimedOut = true;
+                }
+                if(bRadioDataAvailable) {
+                    bRadioDataAvailable = false;
+                    rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
+                    if(rxBuffer[0] == connectionTimedOut) {
                         bConnectionTimedOut = true;
                     }
+                }
+                USBH_Process(&hUSB_Host); // USBH_Background Process
+            }
+            stopAlarm();
+
+            if(!bConnectionTimedOut && bConnectionAccepted) {
+                startConnectTime = HAL_GetTick();
+                uint32_t elapsed = 0;
+                do {
                     if(bRadioDataAvailable) {
                         bRadioDataAvailable = false;
                         rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
-                        if(rxBuffer[0] == connectionTimedOut) {
-                            bConnectionTimedOut = true;
+                        if(rxBuffer[0] == connectRequest) { // Base is still asking for connection
+                            txBuffer[0] = connectionAccepted;
+                            BSP_LED_On(LED_ORANGE);
+                            rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
+                            BSP_LED_Off(LED_ORANGE);
+                            bRemoteConnected = true;
+                            HAL_Delay(500); // Needed for unknown reasons...
                         }
                     }
-                    USBH_Process(&hUSB_Host); // USBH_Background Process
-                }
-                stopAlarm();
-
-                if(!bConnectionTimedOut && bConnectionAccepted) {
-                    startConnectTime = HAL_GetTick();
-                    uint32_t elapsed = 0;
-                    do {
-                        if(bRadioDataAvailable) {
-                            bRadioDataAvailable = false;
-                            rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
-                            if(rxBuffer[0] == connectRequest) { // Base is still asking for connection
-                                txBuffer[0] = connectionAccepted;
-                                BSP_LED_On(LED_ORANGE);
-                                rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
-                                BSP_LED_Off(LED_ORANGE);
-                                bRemoteConnected = true;
-                                HAL_Delay(500); // Needed for unknown reasons...
-                            }
-                        }
-                        elapsed = HAL_GetTick()-startConnectTime;
-                    } while(!bRemoteConnected && (elapsed < MAX_WAIT_ACK_TIME));
-                }
-            } // if(bRadioDataAvailable)
-        }
-        BSP_LED_Off(LED_RED);
-    }
+                    elapsed = HAL_GetTick()-startConnectTime;
+                } while(!bRemoteConnected && (elapsed < MAX_WAIT_ACK_TIME));
+            }
+        } // if(rxBuffer[0] == connectRequest)
+    } // while(!bRemoteConnected)
     BSP_LED_Off(LED_RED);
 }
 
