@@ -187,6 +187,7 @@
 
 
 #define MAX_CONNECTION_TIME  60000
+#define MAX_WAIT_ACK_TIME    5000
 #define QUERY_INTERVAL       300
 
 // State Machine for the USBH_USR_ApplicationState
@@ -572,7 +573,7 @@ connectRemote() {
                             }
                         }
                         elapsed = HAL_GetTick()-startConnectTime;
-                    } while(!bRemoteConnected && (elapsed < 5000));
+                    } while(!bRemoteConnected && (elapsed < MAX_WAIT_ACK_TIME));
                 }
             } // if(bRadioDataAvailable)
         }
@@ -711,7 +712,8 @@ processRemote() {
             }
         }
         elapsed = HAL_GetTick()-startConnectTime;
-    } while(!bBaseDisConnected && (elapsed < MAX_CONNECTION_TIME));
+    } while(!bBaseDisConnected && (elapsed < MAX_WAIT_ACK_TIME));
+    ledsOff();
 }
 
 
