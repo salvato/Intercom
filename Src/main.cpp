@@ -197,6 +197,7 @@ rf24(NRF24_CE_PORT,  NRF24_CE_PIN,
      NRF24_CSN_PORT, NRF24_CSN_PIN,
      NRF24_IRQ_PORT, NRF24_IRQ_PIN, NRF24_IRQ_CHAN);
 
+
 // Data Buffers
 uint8_t*  rxBuffer         = NULL;
 uint8_t*  txBuffer         = NULL;
@@ -253,26 +254,15 @@ typedef enum {
 #define MAX_CONNECTION_TIME  15000
 #define QUERY_INTERVAL       300
 
-/* State Machine for the USBH_USR_ApplicationState */
+// State Machine for the USBH_USR_ApplicationState
 #define USBH_USR_FS_INIT    ((uint8_t)0x00)
 #define USBH_USR_AUDIO      ((uint8_t)0x01)
 
-FATFS USBDISKFatFs;          /* File system object for USB disk logical drive */
-char USBDISKPath[4];         /* USB Host logical drive path */
+FATFS USBDISKFatFs;          // File system object for USB disk logical drive
+char USBDISKPath[4];         // USB Host logical drive path
 
 MSC_ApplicationTypeDef AppliState = APPLICATION_IDLE;
 static uint8_t  USBH_USR_ApplicationState = USBH_USR_FS_INIT;
-
-/* Re-play Wave file status on/off. Defined as external in waveplayer.c file */
-__IO uint32_t RepeatState = REPEAT_ON;
-
-/* Wave Player Pause/Resume Status. Defined as external in waveplayer.c file */
-__IO uint32_t PauseResumeStatus = IDLE_STATUS;
-
-/* Counter for User button presses. Defined as external in waveplayer.c file */
-__IO uint32_t PressCount = 0;
-
-__IO uint32_t CmdIndex = CMD_PLAY;
 
 
 void
@@ -285,7 +275,6 @@ USBH_UserProcess (USBH_HandleTypeDef *pHost, uint8_t vId) {
             break;
 
         case HOST_USER_DISCONNECTION:
-            //>>>>>>>>>>>>>>>>>>>>>>WavePlayer_CallBack();
             AppliState = APPLICATION_IDLE;
             f_mount(NULL, (TCHAR const*)"", 0);
             break;
@@ -307,44 +296,6 @@ USBH_UserProcess (USBH_HandleTypeDef *pHost, uint8_t vId) {
             break;
 
     } //switch(vId)
-}
-
-
-
-void
-COMMAND_AudioExecuteApplication(void) {
-    /* Execute the command switch the command index */
-    switch (CmdIndex) {
-        /* Start Playing from USB Flash memory */
-        case CMD_PLAY:
-            if (RepeatState == REPEAT_ON)
-                //>>>>>>>>>>>>>>>>>>>>>>>>>>>>WavePlayerStart();
-            break;
-        default:
-            break;
-    }
-}
-
-
-void
-MSC_Application(void) {
-    switch(USBH_USR_ApplicationState) {
-        case USBH_USR_AUDIO:
-            COMMAND_AudioExecuteApplication(); // Go to Audio menu
-            USBH_USR_ApplicationState = USBH_USR_FS_INIT; // Set user initialization flag
-            break;
-
-        case USBH_USR_FS_INIT:
-            // Initializes the File System
-            if(f_mount(&USBDISKFatFs, (TCHAR const*)USBDISKPath, 0 ) != FR_OK ) {
-                Error_Handler();
-            }
-            USBH_USR_ApplicationState = USBH_USR_AUDIO; // Go to menu
-            break;
-
-        default:
-            break;
-    }
 }
 
 
@@ -421,7 +372,6 @@ connectRemote() {
     rf24.setRetries(5, 15);//We don't need to bo very fast but reliable
 
     while(!bRemoteConnected) {
-        CmdIndex = CMD_PLAY;
         BSP_LED_On(LED_RED);
         if(bRadioDataAvailable) {
             bRadioDataAvailable  = false;
@@ -1043,7 +993,6 @@ EXTI0_IRQHandler(void) {
         if(bConnectionRequested) {
             bConnectionRequested = false;
             bConnectionAccepted = true;
-            CmdIndex = CMD_STOP; // Ask to stop the Alarm Sound
         }
         else {
             bSuspend = true;

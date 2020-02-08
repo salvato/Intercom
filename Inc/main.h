@@ -17,16 +17,10 @@
 #define RESUME_STATUS    ((uint32_t)0x01) /* Audio Player in Resume Status */
 #define IDLE_STATUS      ((uint32_t)0x02) /* Audio Player in Idle Status */
 
-/* Defines for the Audio used commands */
-#define CMD_PLAY           ((uint32_t)0x00)
-#define CMD_RECORD         ((uint32_t)0x01)
-#define CMD_STOP           ((uint32_t)0x02)
-
 typedef enum {
   APPLICATION_IDLE = 0,
   APPLICATION_START,
   APPLICATION_RUNNING,
-
 } MSC_ApplicationTypeDef;
 
 
