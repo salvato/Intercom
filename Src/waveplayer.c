@@ -51,11 +51,7 @@
 
 extern __IO uint32_t RepeatState, PauseResumeStatus, PressCount;
 
-static uint32_t WaveDataLength = 0;
-static __IO uint32_t AudioRemSize = 0;
 static uint8_t Volume = 70;
-FIL FileRead;
-DIR Directory;
 
 extern __IO uint32_t CmdIndex; // Defined in main.c
 extern MSC_ApplicationTypeDef AppliState; // Defined in main.c
@@ -67,10 +63,6 @@ WavePlayBack(uint32_t AudioFreq) {
     RepeatState = REPEAT_ON;
     if(WavePlayerInit(AudioFreq) != 0) {
         Error_Handler();
-    }
-    if(Audio_Buffer != NULL) {
-        free(Audio_Buffer);
-        Audio_Buffer = NULL;
     }
     Audio_Buffer = (uint8_t*)malloc(AUDIO_BUFFER_SIZE*sizeof(*Audio_Buffer));
     f_lseek(&FileRead, 0);
@@ -150,7 +142,7 @@ WavePlayerInit(uint32_t AudioFreq) {
     return(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, AudioFreq));
 }
 
-#define WAVE_NAME "0:audio_sample.wav"
+
 void
 WavePlayerStart(void) {
     UINT bytesread = 0;
@@ -159,7 +151,7 @@ WavePlayerStart(void) {
     WAVE_FormatTypeDef waveformat;
 
     if(f_opendir(&Directory, path) == FR_OK) {
-        wavefilename = WAVE_NAME;
+            wavefilename = WAVE_NAME;
         if(f_open(&FileRead, wavefilename , FA_READ) != FR_OK) {
             BSP_LED_On(LED5);
             Error_Handler();
@@ -180,6 +172,7 @@ WavePlayer_CallBack(void) {
         PauseResumeStatus = RESUME_STATUS;
         WaveDataLength =0;
         PressCount = 0;
+
         if(BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW) != AUDIO_OK) {
             Error_Handler();
         }

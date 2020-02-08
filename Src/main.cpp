@@ -4,10 +4,8 @@
 #include "string.h"
 #include "stdlib.h"
 #include "nRF24L01.h"
-#include "ff.h"
 #include "ff_gen_drv.h"
 #include "usbh_diskio_dma.h"
-#include "waveplayer.h"
 
 
 
@@ -203,6 +201,7 @@ rf24(NRF24_CE_PORT,  NRF24_CE_PIN,
 uint8_t*  rxBuffer         = NULL;
 uint8_t*  txBuffer         = NULL;
 uint16_t* adcDataIn        = NULL;
+uint8_t*  Audio_Buffer     = NULL;
 uint16_t* Audio_Out_Buffer = NULL;
 uint16_t* pdmDataIn        = NULL;
 uint16_t* pcmDataOut       = NULL;
@@ -212,7 +211,16 @@ uint16_t  offset;
 uint32_t chunk = 0;
 bool     isBaseStation;
 uint8_t  status;
-uint8_t Volume;
+uint8_t  Volume;
+
+char path[] = "0:/";
+FIL FileRead;
+DIR Directory;
+
+UINT bytesread;
+uint32_t WaveDataLength;
+__IO uint32_t AudioRemSize;
+WAVE_FormatTypeDef waveformat;
 
 
 __IO bool tx_ok;
@@ -223,21 +231,13 @@ __IO bool bReady2Send;
 __IO bool bReady2Play;
 __IO bool bBaseSleeping;
 __IO bool bConnectionRequested;
-__IO bool bConnectionAccepted;
-bool bConnectionTimedOut;
+     bool bConnectionAccepted;
+     bool bConnectionTimedOut;
 __IO bool bSuspend;      // true if the Remote ask to suspend the connection
 __IO bool bRadioDataAvailable;
 __IO uint32_t startConnectTime;
+__IO BUFFER_StateTypeDef buffer_offset;
 
-__IO uint32_t AudioRemSize;
-
-UINT bytesread = 0;
-TCHAR path[] = "0:/";
-TCHAR wavefilename[] = "0:audio_sample.wav";
-WAVE_FormatTypeDef waveformat;
-FIL FileRead;
-DIR Directory;
-uint32_t WaveDataLength = 0;
 
 
 // Commands
@@ -261,6 +261,7 @@ FATFS USBDISKFatFs;          /* File system object for USB disk logical drive */
 char USBDISKPath[4];         /* USB Host logical drive path */
 
 MSC_ApplicationTypeDef AppliState = APPLICATION_IDLE;
+static uint8_t  USBH_USR_ApplicationState = USBH_USR_FS_INIT;
 
 /* Re-play Wave file status on/off. Defined as external in waveplayer.c file */
 __IO uint32_t RepeatState = REPEAT_ON;
@@ -273,19 +274,18 @@ __IO uint32_t PressCount = 0;
 
 __IO uint32_t CmdIndex = CMD_PLAY;
 
-extern __IO BUFFER_StateTypeDef buffer_offset;
-
 
 void
 USBH_UserProcess (USBH_HandleTypeDef *pHost, uint8_t vId) {
     UNUSED(pHost);
-    switch (vId) {
+
+    switch(vId) {
 
         case HOST_USER_SELECT_CONFIGURATION:
             break;
 
         case HOST_USER_DISCONNECTION:
-            WavePlayer_CallBack();
+            //>>>>>>>>>>>>>>>>>>>>>>WavePlayer_CallBack();
             AppliState = APPLICATION_IDLE;
             f_mount(NULL, (TCHAR const*)"", 0);
             break;
@@ -297,10 +297,75 @@ USBH_UserProcess (USBH_HandleTypeDef *pHost, uint8_t vId) {
         case HOST_USER_CONNECTION:
             break;
 
-        default:
+        case HOST_USER_CLASS_SELECTED:
             break;
 
-    } // switch (vId)g
+        case HOST_USER_UNRECOVERED_ERROR:
+            break;
+
+        default: // No other cases at present !
+            break;
+
+    } //switch(vId)
+}
+
+
+
+void
+COMMAND_AudioExecuteApplication(void) {
+    /* Execute the command switch the command index */
+    switch (CmdIndex) {
+        /* Start Playing from USB Flash memory */
+        case CMD_PLAY:
+            if (RepeatState == REPEAT_ON)
+                //>>>>>>>>>>>>>>>>>>>>>>>>>>>>WavePlayerStart();
+            break;
+        default:
+            break;
+    }
+}
+
+
+void
+MSC_Application(void) {
+    switch(USBH_USR_ApplicationState) {
+        case USBH_USR_AUDIO:
+            COMMAND_AudioExecuteApplication(); // Go to Audio menu
+            USBH_USR_ApplicationState = USBH_USR_FS_INIT; // Set user initialization flag
+            break;
+
+        case USBH_USR_FS_INIT:
+            // Initializes the File System
+            if(f_mount(&USBDISKFatFs, (TCHAR const*)USBDISKPath, 0 ) != FR_OK ) {
+                Error_Handler();
+            }
+            USBH_USR_ApplicationState = USBH_USR_AUDIO; // Go to menu
+            break;
+
+        default:
+            break;
+    }
+}
+
+
+bool
+prepareFileSystem() {
+    // Link the USB Host disk I/O
+    if(FATFS_LinkDriver(&USBH_Driver, USBDISKPath) != 0) return false;
+    if(USBH_Init(&hUSB_Host, USBH_UserProcess, 0) != USBH_OK) return false;
+    if(USBH_RegisterClass(&hUSB_Host, USBH_MSC_CLASS) != USBH_OK) return false;
+    if(USBH_Start(&hUSB_Host) != USBH_OK) return false;
+
+    USBH_USR_ApplicationState = USBH_USR_FS_INIT;
+    while(AppliState != APPLICATION_START) {
+        USBH_Process(&hUSB_Host); // USBH_Background Process
+    }
+
+    // Initializes (mount) the File System
+    if(f_mount(&USBDISKFatFs, (TCHAR const*)USBDISKPath, 0 ) != FR_OK ) return false;
+    if(f_opendir(&Directory, path) != FR_OK) return false;
+    USBH_USR_ApplicationState = USBH_USR_AUDIO;
+    return true;
 }
 
 
@@ -316,6 +381,11 @@ main(void) {
     InitConfigPin();
     isBaseStation = HAL_GPIO_ReadPin(CONFIGURE_PORT, CONFIGURE_PIN);
     // Initialize the corresponding things..
+    if(!isBaseStation) { // Prepare Wave file to Play
+        if(!prepareFileSystem())
+            // Here we should provide an alternative way to produce the Alarm Sound !
+            Error_Handler();
+    }
     initBuffers(isBaseStation);
     // Init Push Button(s)
     BSP_PB_Init(BUTTON_KEY, BUTTON_MODE_EXTI);
@@ -328,12 +398,6 @@ main(void) {
             processBase();
         }
         else {
-            USBH_Init(&hUSB_Host, USBH_UserProcess, 0);// Init Host Library
-            USBH_RegisterClass(&hUSB_Host, USBH_MSC_CLASS);// Add Supported Class
-            USBH_Start(&hUSB_Host);// Start Host Process
-            if(FATFS_LinkDriver(&USBH_Driver, USBDISKPath) != 0) {
-                Error_Handler();
-            }
             connectRemote();// We will be woken up by receiving a command
             processRemote();
         }
@@ -345,7 +409,7 @@ main(void) {
 // It then start playing an Alarm Sound and wait for the user to pick up the phone.
 // If the user does not interact within a given time the Remote stops the sound
 // ad return waiting a new call.
-// If the user interact within the given time it send a "Connectio Accepted" message
+// If the user interact within the given time it send a "Connection Accepted" message
 // and assumes to be connected with the Base.
 void
 connectRemote() {
@@ -354,43 +418,33 @@ connectRemote() {
     bConnectionRequested  = false;
     setRole(PRX);
     rf24.flush_rx();
-    rf24.setRetries(5, 15);//We don't need to be very fast but reliable
+    rf24.setRetries(5, 15);//We don't need to bo very fast but reliable
 
     while(!bRemoteConnected) {
-        AppliState = APPLICATION_IDLE;
         CmdIndex = CMD_PLAY;
         BSP_LED_On(LED_RED);
         if(bRadioDataAvailable) {
-            bRadioDataAvailable = false;
+            bRadioDataAvailable  = false;
             bConnectionRequested = false;
+            bConnectionTimedOut  = false;
             BSP_LED_On(LED_BLUE);
             rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
             BSP_LED_Off(LED_BLUE);
             if(rxBuffer[0] == connectRequest) {
                 bConnectionRequested = true;
-                bConnectionTimedOut = false;
                 buffer_offset = BUFFER_OFFSET_NONE;
-
-                // Initializes the File System
-                if(f_mount(&USBDISKFatFs, (TCHAR const*)USBDISKPath, 0 ) != FR_OK ) {
+                bytesread = 0;
+                WaveDataLength = 0;
+                AudioRemSize = 0;
+                if(f_open(&FileRead, WAVE_NAME , FA_READ) != FR_OK) {
+                    // Here we should provide an alternative way to produce the Alarm Sound
                     Error_Handler();
                 }
-
-                if(f_opendir(&Directory, path) == FR_OK) {
-                    if(f_open(&FileRead, wavefilename , FA_READ) != FR_OK) {
-                        BSP_LED_On(LED5);
-                        Error_Handler();
-                    }
-                    else {
-                        f_read (&FileRead, &waveformat, sizeof(waveformat), &bytesread);
-                        WaveDataLength = waveformat.FileSize;
-                    }
-                }
-                if(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, waveformat.SampleRate) != AUDIO_OK)
+                // Read the wav file header
+                f_read (&FileRead, &waveformat, sizeof(waveformat), &bytesread);
+                WaveDataLength = waveformat.FileSize;
+                if(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, waveformat.SampleRate) != AUDIO_OK) {
                     Error_Handler();
-                if(Audio_Buffer != NULL) {
-                    free(Audio_Buffer);
-                    Audio_Buffer = NULL;
                 }
                 Audio_Buffer = (uint8_t*)malloc(AUDIO_BUFFER_SIZE*sizeof(*Audio_Buffer));
                 f_lseek(&FileRead, 0);
@@ -398,8 +452,8 @@ connectRemote() {
                 AudioRemSize = WaveDataLength - bytesread;
                 BSP_AUDIO_OUT_Play((uint16_t*)&Audio_Buffer[0], AUDIO_BUFFER_SIZE);
 
-                while((AudioRemSize != 0) &&
-                      !bConnectionAccepted &&
+                while(!bConnectionAccepted &&
+                      AudioRemSize != 0    &&
                       !bConnectionTimedOut)
                 {
                     bytesread = 0;
@@ -407,16 +461,14 @@ connectRemote() {
                         f_read(&FileRead,
                                &Audio_Buffer[0],
                                AUDIO_BUFFER_SIZE/2,
-                               (UINT *)&bytesread);
+                               &bytesread);
                         buffer_offset = BUFFER_OFFSET_NONE;
                     }
-
                     if(buffer_offset == BUFFER_OFFSET_FULL) {
                         f_read(&FileRead,
                                &Audio_Buffer[AUDIO_BUFFER_SIZE/2],
                                AUDIO_BUFFER_SIZE/2,
-                               (UINT *)&bytesread);
-
+                               &bytesread);
                         buffer_offset = BUFFER_OFFSET_NONE;
                     }
                     if(AudioRemSize > (AUDIO_BUFFER_SIZE / 2)) {
@@ -424,19 +476,20 @@ connectRemote() {
                     }
                     else {
                         AudioRemSize = 0;
+                        bConnectionTimedOut = true;
                     }
-
-                    USBH_Process(&hUSB_Host); // USBH_Background Process
                     if(bRadioDataAvailable) {
                         bRadioDataAvailable = false;
-                        BSP_LED_Toggle(LED_BLUE);
                         rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
                         if(rxBuffer[0] == connectionTimedOut) {
                             bConnectionTimedOut = true;
-                            CmdIndex = CMD_STOP; // Ask to stop the Alarm Sound
                         }
                     }
+                    USBH_Process(&hUSB_Host); // USBH_Background Process
                 }
+                free(Audio_Buffer);
+                BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW);
+                f_close(&FileRead);
                 if(!bConnectionTimedOut) {
                     rf24.flush_rx();
                     bRadioDataAvailable = false;
@@ -452,8 +505,11 @@ connectRemote() {
                                 rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
                                 BSP_LED_Off(LED_ORANGE);
                                 bRemoteConnected = true;
-                                delayMicroseconds(6*250*15); // Give nRF24 time to transmit before
+                                delayMicroseconds(6*250); // Give nRF24 time to transmit before
                                                           // changing role from PRX to PTX
+                            }
+                            else if(rxBuffer[0] == connectionTimedOut) {
+                                break;
                             }
                         }
                         elapsed = HAL_GetTick()-startConnectTime;
@@ -495,7 +551,6 @@ connectBase() {
         do {
             if(HAL_GetTick()-t0 > QUERY_INTERVAL) {
                 t0 = HAL_GetTick();
-                rf24.flush_tx();
                 txBuffer[0] = connectRequest;
                 BSP_LED_On(LED_BLUE);
                 rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
@@ -509,7 +564,7 @@ connectBase() {
                 BSP_LED_Off(LED_ORANGE); // Reading done
                 if(rxBuffer[0] == connectionAccepted) {
                     bBaseConnected = true;
-                    delayMicroseconds(6*250*15); // Give nRF24 time to transmit and wait for ACK
+                    delayMicroseconds(6*250); // Give nRF24 time to transmit and wait for ACK
                                                  // before changing role from PTX to PRX
                 }
             }
@@ -518,13 +573,10 @@ connectBase() {
 
         ledsOff();
         if(!bBaseConnected) {
-            BSP_LED_On(LED_BLUE);
-            rf24.flush_tx();
             txBuffer[0] = connectionTimedOut;
+            BSP_LED_On(LED_BLUE);
             rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
             rf24.startWrite();
-            delayMicroseconds(6*250*15); // Give nRF24 time to transmit and wait for ACK
-                                         // before changing role from PTX to PRX
             BSP_LED_Off(LED_BLUE);
         }
     } while(!bBaseConnected);

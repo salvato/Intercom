@@ -219,9 +219,7 @@ BSP_AUDIO_OUT_Init(uint16_t OutputDevice, uint8_t Volume, uint32_t AudioFreq) {
     BSP_AUDIO_OUT_ClockConfig(&hAudioOutI2s, AudioFreq, NULL);
 
     /* I2S data transfer preparation:
-       Prepare the Media to be used for the audio transfer
-       from memory to I2S peripheral
-    */
+       Prepare the Media to be used for the audio transfer from memory to I2S peripheral */
     hAudioOutI2s.Instance = I2S3;
     if(HAL_I2S_GetState(&hAudioOutI2s) == HAL_I2S_STATE_RESET) {
         /* Init the I2S MSP: this __weak function can be redefined by the application*/
@@ -229,10 +227,9 @@ BSP_AUDIO_OUT_Init(uint16_t OutputDevice, uint8_t Volume, uint32_t AudioFreq) {
     }
 
     /* I2S data transfer preparation:
-       Prepare the Media to be used for the audio transfer
-       from memory to I2S peripheral
-    */
-    if(I2S3_Init(AudioFreq) != AUDIO_OK) {/* Configure the I2S peripheral */
+       Prepare the Media to be used for the audio transfer from memory to I2S peripheral */
+    /* Configure the I2S peripheral */
+    if(I2S3_Init(AudioFreq) != AUDIO_OK) {
         ret = AUDIO_ERROR;
     }
 

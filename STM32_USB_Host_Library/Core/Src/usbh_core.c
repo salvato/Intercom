@@ -222,7 +222,7 @@ DeInitStateMachine(USBH_HandleTypeDef *phost) {
   */
 USBH_StatusTypeDef
 USBH_RegisterClass(USBH_HandleTypeDef *phost, USBH_ClassTypeDef *pclass) {
-    USBH_StatusTypeDef status = USBH_OK;
+    USBH_StatusTypeDef   status = USBH_OK;
 
     if(pclass != 0) {
         if(phost->ClassNumber < USBH_MAX_NUM_SUPPORTED_CLASS) {

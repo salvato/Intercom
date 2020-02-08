@@ -3,8 +3,11 @@
 
 #include "stm32f4_discovery.h"
 #include "stm32f4_discovery_audio.h"
+#include "ff.h"
+//#include "waveplayer.h"
 #include "usbh_def.h"
 
+#define WAVE_NAME "0:audio_sample.wav"
 
 #define REPEAT_ON        ((uint32_t)0x00) /* Replay Status in ON */
 #define REPEAT_OFF       ((uint32_t)0x01) /* Replay Status in OFF */
@@ -25,6 +28,37 @@ typedef enum {
   APPLICATION_RUNNING,
 
 } MSC_ApplicationTypeDef;
+
+
+typedef enum {
+  BUFFER_OFFSET_NONE = 0,
+  BUFFER_OFFSET_HALF,
+  BUFFER_OFFSET_FULL,
+
+} BUFFER_StateTypeDef;
+
+
+typedef struct {
+  uint32_t   ChunkID;       /* 0 */
+  uint32_t   FileSize;      /* 4 */
+  uint32_t   FileFormat;    /* 8 */
+  uint32_t   SubChunk1ID;   /* 12 */
+  uint32_t   SubChunk1Size; /* 16*/
+  uint16_t   AudioFormat;   /* 20 */
+  uint16_t   NbrChannels;   /* 22 */
+  uint32_t   SampleRate;    /* 24 */
+
+  uint32_t   ByteRate;      /* 28 */
+  uint16_t   BlockAlign;    /* 32 */
+  uint16_t   BitPerSample;  /* 34 */
+  uint32_t   SubChunk2ID;   /* 36 */
+  uint32_t   SubChunk2Size; /* 40 */
+
+} WAVE_FormatTypeDef;
+
+
+#define AUDIO_BUFFER_SIZE             4096
+
 
 
 #ifdef __cplusplus
@@ -50,6 +84,7 @@ void EXTI1_IRQHandler(void);
 void I2S3_IRQHandler(void);
 void I2S2_IRQHandler(void);
 void OTG_FS_IRQHandler(void);
+void USBH_UserProcess(USBH_HandleTypeDef *pHost, uint8_t vId);
 void COMMAND_AudioExecuteApplication(void);
 void MSC_Application(void);
 
@@ -63,6 +98,7 @@ extern I2S_HandleTypeDef hAudioInI2s;
 #ifdef __cplusplus
 }
 #endif
+
 
 
 #endif // __MAIN_H__
