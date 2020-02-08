@@ -214,7 +214,9 @@ static void processBase();
 static void processRemote();
 static void USBH_UserProcess (USBH_HandleTypeDef *pHost, uint8_t vId);
 static bool prepareFileSystem();
-static void startAlarm();;
+static void startAlarm();
+static bool updateAlarm();
+
 
 char buf[255];
 
@@ -502,26 +504,7 @@ connectRemote() {
                       AudioRemSize != 0    &&
                       !bConnectionTimedOut)
                 {
-                    bytesread = 0;
-                    if(buffer_offset == BUFFER_OFFSET_HALF) {
-                        f_read(&FileRead,
-                               &Audio_Buffer[0],
-                               AUDIO_BUFFER_SIZE/2,
-                               &bytesread);
-                        buffer_offset = BUFFER_OFFSET_NONE;
-                    }
-                    if(buffer_offset == BUFFER_OFFSET_FULL) {
-                        f_read(&FileRead,
-                               &Audio_Buffer[AUDIO_BUFFER_SIZE/2],
-                               AUDIO_BUFFER_SIZE/2,
-                               &bytesread);
-                        buffer_offset = BUFFER_OFFSET_NONE;
-                    }
-                    if(AudioRemSize > (AUDIO_BUFFER_SIZE / 2)) {
-                        AudioRemSize -= bytesread;
-                    }
-                    else {
-                        AudioRemSize = 0;
+                    if(!updateAlarm()) {
                         bConnectionTimedOut = true;
                     }
                     if(bRadioDataAvailable) {
@@ -719,6 +702,34 @@ startAlarm() {
     f_read (&FileRead, &Audio_Buffer[0], AUDIO_BUFFER_SIZE, &bytesread);
     AudioRemSize = WaveDataLength - bytesread;
     BSP_AUDIO_OUT_Play((uint16_t*)&Audio_Buffer[0], AUDIO_BUFFER_SIZE);
+}
+
+
+bool
+updateAlarm() {
+    bytesread = 0;
+    if(buffer_offset == BUFFER_OFFSET_HALF) {
+        f_read(&FileRead,
+               &Audio_Buffer[0],
+               AUDIO_BUFFER_SIZE/2,
+               &bytesread);
+        buffer_offset = BUFFER_OFFSET_NONE;
+    }
+    if(buffer_offset == BUFFER_OFFSET_FULL) {
+        f_read(&FileRead,
+               &Audio_Buffer[AUDIO_BUFFER_SIZE/2],
+               AUDIO_BUFFER_SIZE/2,
+               &bytesread);
+        buffer_offset = BUFFER_OFFSET_NONE;
+    }
+    if(AudioRemSize > (AUDIO_BUFFER_SIZE / 2)) {
+        AudioRemSize -= bytesread;
+    }
+    else {
+        AudioRemSize = 0;
+        return false;
+    }
+    return true;
 }
 
 
