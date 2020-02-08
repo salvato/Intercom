@@ -440,12 +440,11 @@ connectRemote() {
                     }
                     USBH_Process(&hUSB_Host); // USBH_Background Process
                 }
-                free(Audio_Buffer);
                 BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW);
+                free(Audio_Buffer);
                 f_close(&FileRead);
-                if(!bConnectionTimedOut) {
-                    rf24.flush_rx();
-                    bRadioDataAvailable = false;
+
+                if(!bConnectionTimedOut && bConnectionAccepted) {
                     startConnectTime = HAL_GetTick();
                     uint32_t elapsed = 0;
                     do {
@@ -458,15 +457,12 @@ connectRemote() {
                                 rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
                                 BSP_LED_Off(LED_ORANGE);
                                 bRemoteConnected = true;
-                                delayMicroseconds(6*250); // Give nRF24 time to transmit before
-                                                          // changing role from PRX to PTX
-                            }
-                            else if(rxBuffer[0] == connectionTimedOut) {
-                                break;
+                                HAL_Delay(300); // Give nRF24 time to transmit before
+                                                 // changing role from PRX to PTX
                             }
                         }
                         elapsed = HAL_GetTick()-startConnectTime;
-                    } while(!bRemoteConnected || (elapsed < 5000));
+                    } while(!bRemoteConnected && (elapsed < 5000));
                 }
             } // if(bRadioDataAvailable)
         }
