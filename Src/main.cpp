@@ -216,6 +216,7 @@ static void USBH_UserProcess (USBH_HandleTypeDef *pHost, uint8_t vId);
 static bool prepareFileSystem();
 static void startAlarm();
 static bool updateAlarm();
+static void stopAlarm();
 
 
 char buf[255];
@@ -516,9 +517,7 @@ connectRemote() {
                     }
                     USBH_Process(&hUSB_Host); // USBH_Background Process
                 }
-                BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW);
-                free(Audio_Buffer);
-                f_close(&FileRead);
+                stopAlarm();
 
                 if(!bConnectionTimedOut && bConnectionAccepted) {
                     startConnectTime = HAL_GetTick();
@@ -730,6 +729,14 @@ updateAlarm() {
         return false;
     }
     return true;
+}
+
+
+void
+stopAlarm() {
+    BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW);
+    free(Audio_Buffer);
+    f_close(&FileRead);
 }
 
 
