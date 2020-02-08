@@ -502,10 +502,7 @@ connectRemote() {
         if(rxBuffer[0] == connectRequest) {
             bConnectionRequested = true;
             startAlarm();
-            while(!bConnectionAccepted &&
-                  AudioRemSize != 0    &&
-                  !bConnectionTimedOut)
-            {
+            while(!bConnectionAccepted && !bConnectionTimedOut) {
                 if(!updateAlarm()) {
                     bConnectionTimedOut = true;
                 }
@@ -539,7 +536,9 @@ connectRemote() {
                     elapsed = HAL_GetTick()-startConnectTime;
                 } while(!bRemoteConnected && (elapsed < MAX_WAIT_ACK_TIME));
             }
+
         } // if(rxBuffer[0] == connectRequest)
+
     } // while(!bRemoteConnected)
     BSP_LED_Off(LED_RED);
 }
