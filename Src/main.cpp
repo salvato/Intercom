@@ -68,6 +68,15 @@
 
 
 //===============================================================
+//                  USB OTG for Alarm wave file
+//===============================================================
+// PA10     ID line Debug
+// PA11     DM
+// PA12     DP
+// PC0      POWERSW
+//===============================================================
+
+//===============================================================
 //                 CONFIGURE_PIN
 // MUST be connected to GND in the Slave Station
 //===============================================================
@@ -196,6 +205,20 @@
 #define USBH_USR_AUDIO      ((uint8_t)0x01)
 
 
+// Commands
+typedef enum {
+    connectRequest = 0x10,
+    connectionAccepted,
+    connectionTimedOut,
+    suspendCmd,
+    suspendAck,
+    openGateCmd,
+    openGateAck,
+    openCarGateCmd,
+    openCarGateAck
+} Commands;
+
+
 //===============================================================
 // Local Functions
 //===============================================================
@@ -218,6 +241,7 @@ static bool prepareFileSystem();
 static void startAlarm();
 static bool updateAlarm();
 static void stopAlarm();
+static void processCommand(Commands command);
 
 
 char buf[255];
@@ -229,7 +253,7 @@ USBH_HandleTypeDef hUSB_Host; // USB Host handle
 extern HCD_HandleTypeDef hhcd; // defined in usbh_conf.c
 
 
-// nRF Addresses
+// nRF24 Radio Addresses
 // Note: Addresses where the level shifts only one time (that is, 000FFFFFFF)
 //       can often be detected in noise and can give a false detection,
 //       which may give a raised Packet-Error-Rate.
@@ -296,20 +320,6 @@ __IO BUFFER_StateTypeDef buffer_offset;
 
 
 
-// Commands
-typedef enum {
-    connectRequest = 0x10,
-    connectionAccepted,
-    connectionTimedOut,
-    suspendCmd,
-    suspendAck,
-    openGateCmd,
-    openGateAck,
-    openCarGateCmd,
-    openCarGateAck
-} Commands;
-
-
 FATFS USBDISKFatFs;          // File system object for USB disk logical drive
 char USBDISKPath[4];         // USB Host logical drive path
 
@@ -318,6 +328,100 @@ static uint8_t  USBH_USR_ApplicationState = USBH_USR_FS_INIT;
 
 
 // HAL_NVIC_SystemReset();
+
+
+/*
+TIM_HandleTypeDef    TimHandle;
+uint32_t uwPrescalerValue = 0;
+TIM_OnePulse_InitTypeDef sConfig;
+
+int
+main(void) {
+  HAL_Init();
+  SystemClock_Config();
+  BSP_LED_Init(LED3);
+
+//  ##2 Compute the prescaler value, to have TIM4Freq = 25000000 Hz
+//
+//  TIM4 input clock is set to APB1 clock (PCLK1),
+//  if (APB1 prescaler = 1) x1 else x2
+//  prescaler is 2.
+//  TIM1CLK = (HCLK/2) x2 = HCLK
+//  TIM4CLK = SystemCoreClock
+//
+//  Prescaler = (TIM4CLK/TIM4 counter clock) - 1
+//
+//  The prescaler value is computed in order to have TIM4 counter clock
+//  set at 25000000 Hz.
+
+  uwPrescalerValue = (uint32_t)((SystemCoreClock) / 25000000) - 1;
+
+//  ##-3- Configure the TIM peripheral #######################################
+//
+//  -The external signal is connected to TIM4_CH2 pin (PB.07),
+//   and a rising edge on this input is used to trigger the Timer.
+//
+//  -The One Pulse signal is output on TIM4_CH1 (PB.06).
+//
+//  The delay value is fixed to:
+//  - Delay =  CCR1/TIM4 counter clock
+//          = 16383 / 25000000 [sec]
+//
+//  The pulse value is fixed to :
+//  - Pulse value = (TIM_Period - TIM_Pulse)/TIM4 counter clock
+//                = (65535 - 16383) / 25000000 [sec]
+
+  TimHandle.Instance = TIMx;
+
+  TimHandle.Init.Period            = 0xFFFF;
+  TimHandle.Init.Prescaler         = uwPrescalerValue;
+  TimHandle.Init.ClockDivision     = 0;
+  TimHandle.Init.CounterMode       = TIM_COUNTERMODE_UP;
+  TimHandle.Init.RepetitionCounter = 0;
+  TimHandle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+
+  if (HAL_TIM_OnePulse_Init(&TimHandle, TIM_OPMODE_SINGLE) != HAL_OK) {
+    Error_Handler();
+  }
+
+//  ##-2- Configure the Channel 1 in One Pulse mode ##########################
+  sConfig.OCMode       = TIM_OCMODE_PWM2;
+  sConfig.OCPolarity   = TIM_OCPOLARITY_HIGH;
+  sConfig.Pulse        = 16383;
+  sConfig.ICPolarity   = TIM_ICPOLARITY_RISING;
+  sConfig.ICSelection  = TIM_ICSELECTION_DIRECTTI;
+  sConfig.ICFilter     = 0;
+  sConfig.OCNPolarity  = TIM_OCNPOLARITY_HIGH;
+  sConfig.OCIdleState  = TIM_OCIDLESTATE_RESET;
+  sConfig.OCNIdleState = TIM_OCNIDLESTATE_RESET;
+
+  if (HAL_TIM_OnePulse_ConfigChannel(&TimHandle, &sConfig, TIM_CHANNEL_1, TIM_CHANNEL_2) != HAL_OK) {
+    Error_Handler();
+  }
+
+//  ##-4- Start the One Pulse mode #######################################
+//
+//   * The one pulse waveform can be displayed using an oscilloscope and it looks
+//   like this.
+//
+//                                ____
+//                                |   |
+//   CH2 _________________________|   |_________________________________________
+//
+//                                              ___________________________
+//                                             |                           |
+//   CH1 ______________________________________|                           |____
+//                               <---Delay----><------Pulse--------------->
+
+
+  if (HAL_TIM_OnePulse_Start(&TimHandle, TIM_CHANNEL_1) != HAL_OK) {
+    Error_Handler();
+  }
+
+  while (1) {
+  }
+}
+*/
 
 
 int
@@ -363,7 +467,7 @@ main(void) {
             processBase();
         }
         else {
-            connectRemote();// We will be woken up by receiving a command
+            connectRemote();// We will be woken up by receiving a command from Base
             processRemote();
         }
     }
@@ -434,14 +538,14 @@ connectBase() {
     do {
         BSP_LED_On(LED_RED);
         bBaseConnected = false;
+
         bBaseSleeping = true;
-        // We will be woken up only by a button press
-        while(bBaseSleeping) {
+        while(bBaseSleeping) {// We will be woken up only by a button press
         }
 
         // An external event has been detected: try to connect to a Remote !
-        startConnectTime = HAL_GetTick();
-        uint32_t t0      = startConnectTime-2000; // Just to start the first request.
+        startConnectTime = HAL_GetTick(); // Globally defined: it can be reset by another button press
+        uint32_t t0 = startConnectTime-QUERY_INTERVAL-1; // Just to send immediately the first request.
         uint32_t elapsed = 0;
         do {
             if(HAL_GetTick()-t0 > QUERY_INTERVAL) {
@@ -521,7 +625,7 @@ connectRemote() {
             stopAlarm();
 
             if(!bConnectionTimedOut && bConnectionAccepted) {
-                startConnectTime = HAL_GetTick();
+                uint32_t startConnectTime = HAL_GetTick();
                 uint32_t elapsed = 0;
                 do {
                     if(bRadioDataAvailable) {
@@ -585,6 +689,9 @@ processBase() {
                     bSuspend = true;
                     rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
                     HAL_Delay(300);
+                }
+                else {
+                    processCommand((Commands)rxBuffer[0]);
                 }
             }
             else { // The packet contains Audio Data: first send our audio data...
@@ -694,6 +801,19 @@ processRemote() {
 
 
 void
+processCommand(Commands command) {
+    switch(command) {
+        case openGateCmd:
+            break;
+        case openCarGateCmd:
+            break;
+        default:
+            break;
+    }
+}
+
+
+void
 startAlarm() {
     buffer_offset = BUFFER_OFFSET_NONE;
     bytesread = 0;
@@ -767,7 +887,7 @@ PushButton_Init(GPIO_TypeDef* Port, uint32_t Pin, IRQn_Type Irq) {
     GPIO_InitTypeDef GPIO_InitStruct;
 
     GPIO_InitStruct.Pin   = Pin;
-    GPIO_InitStruct.Pull  = GPIO_NOPULL;
+    GPIO_InitStruct.Pull  = GPIO_PULLDOWN;
     GPIO_InitStruct.Speed = GPIO_SPEED_FAST;
     GPIO_InitStruct.Mode  = GPIO_MODE_IT_RISING;
     HAL_GPIO_Init(Port, &GPIO_InitStruct);
@@ -784,10 +904,11 @@ Relay_Init(GPIO_TypeDef* Port, uint32_t Pin) {
     GPIO_InitTypeDef GPIO_InitStruct;
 
     GPIO_InitStruct.Pin   = Pin;
-    GPIO_InitStruct.Pull  = GPIO_PULLUP;
+    GPIO_InitStruct.Pull  = GPIO_PULLDOWN;
     GPIO_InitStruct.Speed = GPIO_SPEED_FAST;
     GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
     HAL_GPIO_Init(Port, &GPIO_InitStruct);
+    HAL_GPIO_WritePin(Port, Pin, GPIO_PIN_RESET);
 }
 
 
@@ -1115,31 +1236,51 @@ HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi) {
 }
 
 
-/// This function handles External line 0 interrupt request.
 void
-EXTI0_IRQHandler(void) {
-    if(isBaseStation) {
-        startConnectTime = HAL_GetTick();
-        bBaseSleeping = false;
-    }
-    else {
-        if(bConnectionRequested) {
-            bConnectionRequested = false;
-            bConnectionAccepted = true;
+HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+    if(GPIO_Pin == GPIO_PIN_0) {
+        if(isBaseStation) {
+            startConnectTime = HAL_GetTick();
+            bBaseSleeping = false;
         }
         else {
-            bSuspend = true;
+            if(bConnectionRequested) {
+                bConnectionRequested = false;
+                bConnectionAccepted = true;
+            }
+            else {
+                bSuspend = true;
+            }
         }
     }
-    __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_0);
+
 }
 
+/// This function handles External line 0 interrupt request.
+//void
+//EXTI0_IRQHandler(void) {
+//    if(isBaseStation) {
+//        startConnectTime = HAL_GetTick();
+//        bBaseSleeping = false;
+//    }
+//    else {
+//        if(bConnectionRequested) {
+//            bConnectionRequested = false;
+//            bConnectionAccepted = true;
+//        }
+//        else {
+//            bSuspend = true;
+//        }
+//    }
+//    __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_0);
+//}
 
-/// This function handles External line 1 interrupt request.
-void
-EXTI1_IRQHandler(void) {
-    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_1);
-}
+
+///// This function handles External line 1 interrupt request.
+//void
+//EXTI1_IRQHandler(void) {
+//    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_1);
+//}
 
 
 /// This function handles main I2S interrupt.

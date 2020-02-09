@@ -59,7 +59,10 @@ void DebugMon_Handler(void);
 void PendSV_Handler(void);
 void SysTick_Handler(void);
 void SPIx_IRQHandler(void);
-
+void EXTI0_IRQHandler(void);
+void EXTI2_IRQHandler(void);
+void EXTI3_IRQHandler(void);
+void EXTI4_IRQHandler(void);
 #ifdef __cplusplus
 }
 #endif

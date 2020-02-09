@@ -175,10 +175,35 @@ void SysTick_Handler(void)
   * @param  None
   * @retval None
   */
-void SPIx_IRQHandler(void)
-{
+void
+SPIx_IRQHandler(void) {
     HAL_SPI_IRQHandler(&SpiHandle);
 }
+
+
+void
+EXTI0_IRQHandler(void) {
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_0);
+}
+
+
+void
+EXTI2_IRQHandler(void) {
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_2);
+}
+
+
+void
+EXTI3_IRQHandler(void) {
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_3);
+}
+
+
+void
+EXTI4_IRQHandler(void) {
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_4);
+}
+
 
 /**
   * @}
