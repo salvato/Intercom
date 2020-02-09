@@ -570,7 +570,9 @@ processBase() {
     if(HAL_TIM_Base_Start(&Tim2Handle) != HAL_OK) Error_Handler();
     BSP_LED_On(LED_GREEN);
     bSuspend = false;
-    while(!bSuspend) {
+    bool bReceptionTimeOut = false;
+    uint32_t t0 = HAL_GetTick();
+    while(!bSuspend && ! bReceptionTimeOut) {
         if(bRadioDataAvailable) {
             bRadioDataAvailable = false;
             rf24.available(&pipe_num);
@@ -599,8 +601,10 @@ processBase() {
                     Audio_Out_Buffer[offset+1] = rxBuffer[indx] << 8; // 2nd Stereo Channel
                 }
             }// We have done with the new data.
+            t0 = HAL_GetTick();
         } // if(bRadioDataAvailable)
-    } // while(!bSuspend)
+        bReceptionTimeOut = (HAL_GetTick()-t0) > MAX_NO_SIGNAL_TIME;
+    } // while(!bSuspend && ! bReceptionTimeOut)
     HAL_TIM_Base_Stop(&Tim2Handle);
     BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio and power down the Codec
     ledsOff();
@@ -650,7 +654,7 @@ processRemote() {
         } // if(bRadioDataAvailable)
         USBH_Process(&hUSB_Host); // USBH_Background Process
         bReceptionTimeOut = (HAL_GetTick()-t0) > MAX_NO_SIGNAL_TIME;
-    } // while(!bSuspend)
+    } // while(!bSuspend && ! bReceptionTimeOut)
 
     ledsOff();
     BSP_AUDIO_IN_Stop();               // Stop sending Audio Data
