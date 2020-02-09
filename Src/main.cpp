@@ -188,6 +188,7 @@
 
 #define MAX_CONNECTION_TIME  60000
 #define MAX_WAIT_ACK_TIME    5000
+#define MAX_NO_SIGNAL_TIME   10000
 #define QUERY_INTERVAL       300
 
 // State Machine for the USBH_USR_ApplicationState
@@ -621,7 +622,9 @@ processRemote() {
 
     bRadioIrq = true; // To force the first sending when we are ready to send
     bSuspend = false;
-    while(!bSuspend) {
+    bool bReceptionTimeOut = false;
+    uint32_t t0 = HAL_GetTick();
+    while(!bSuspend && ! bReceptionTimeOut) {
         if(bReady2Send && bRadioIrq) { // We will send data only when available and
             bReady2Send = false;       // the previous data were sent or lost !
             bRadioIrq = false;
@@ -642,10 +645,11 @@ processRemote() {
                 Audio_Out_Buffer[offset]   = rxBuffer[indx] << 8; // 1st Stereo Channel
                 Audio_Out_Buffer[offset+1] = rxBuffer[indx] << 8; // 2nd Stereo Channel
             }
+            t0 = HAL_GetTick();
             // We have done with the new data...
-
-        }
+        } // if(bRadioDataAvailable)
         USBH_Process(&hUSB_Host); // USBH_Background Process
+        bReceptionTimeOut = (HAL_GetTick()-t0) > MAX_NO_SIGNAL_TIME;
     } // while(!bSuspend)
 
     ledsOff();
@@ -656,7 +660,7 @@ processRemote() {
     rf24.flush_rx();
 
     startConnectTime = HAL_GetTick();
-    uint32_t t0      = startConnectTime-2000; // Just to start the first request.
+    t0 = startConnectTime-2000; // Just to start the first request.
     uint32_t elapsed = 0;
     bool bBaseDisConnected = false;
     do {
