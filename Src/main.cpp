@@ -316,6 +316,9 @@ MSC_ApplicationTypeDef AppliState = APPLICATION_IDLE;
 static uint8_t  USBH_USR_ApplicationState = USBH_USR_FS_INIT;
 
 
+// HAL_NVIC_SystemReset();
+
+
 int
 main(void) {
     const uint8_t Channel = 76;
@@ -482,20 +485,19 @@ connectBase() {
 // and assumes to be connected with the Base.
 void
 connectRemote() {
-    bool bRemoteConnected = false;
-    bConnectionAccepted   = false;
-    bConnectionRequested  = false;
     setRole(PRX);
     rf24.flush_rx();
-    rf24.setRetries(5, 15);//We don't need to bo very fast but reliable
+    rf24.setRetries(5, 15);
 
+    bool bRemoteConnected = false;
     while(!bRemoteConnected) {
+        bConnectionAccepted  = false;
+        bConnectionRequested = false;
+        bConnectionTimedOut  = false;
         BSP_LED_On(LED_RED);
         while(!bRadioDataAvailable) {
         }
         bRadioDataAvailable  = false;
-        bConnectionRequested = false;
-        bConnectionTimedOut  = false;
         BSP_LED_On(LED_BLUE);
         rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
         BSP_LED_Off(LED_BLUE);
@@ -524,7 +526,7 @@ connectRemote() {
                     if(bRadioDataAvailable) {
                         bRadioDataAvailable = false;
                         rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
-                        if(rxBuffer[0] == connectRequest) { // Base is still asking for connection
+                        if(rxBuffer[0] == connectRequest) { // Base is still asking for connection ?
                             txBuffer[0] = connectionAccepted;
                             BSP_LED_On(LED_ORANGE);
                             rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
@@ -533,12 +535,14 @@ connectRemote() {
                             HAL_Delay(500); // Needed for unknown reasons...
                         }
                     }
+                    USBH_Process(&hUSB_Host); // USBH_Background Process
                     elapsed = HAL_GetTick()-startConnectTime;
                 } while(!bRemoteConnected && (elapsed < MAX_WAIT_ACK_TIME));
             }
-
+            USBH_Process(&hUSB_Host); // USBH_Background Process
         } // if(rxBuffer[0] == connectRequest)
 
+        USBH_Process(&hUSB_Host); // USBH_Background Process
     } // while(!bRemoteConnected)
     BSP_LED_Off(LED_RED);
 }
@@ -641,6 +645,7 @@ processRemote() {
             // We have done with the new data...
 
         }
+        USBH_Process(&hUSB_Host); // USBH_Background Process
     } // while(!bSuspend)
 
     ledsOff();
@@ -674,6 +679,7 @@ processRemote() {
             }
         }
         elapsed = HAL_GetTick()-startConnectTime;
+        USBH_Process(&hUSB_Host); // USBH_Background Process
     } while(!bBaseDisConnected && (elapsed < MAX_WAIT_ACK_TIME));
     ledsOff();
 }
