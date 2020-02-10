@@ -161,18 +161,18 @@
 
 
 //===============================================================
-//                     Relays
+// Relays (We use TIM3 to produce a pulse long enough)
 //===============================================================
-// PA2      Gate Relay
-// PA3      Car Gate Relay
+// PB0      Gate Relay              TIM3 CH3
+// PB1      Car Gate Relay          TIM3 CH4
 //===============================================================
-#define GATE_RELAY_CLK_ENABLE()         __HAL_RCC_GPIOA_CLK_ENABLE();
+#define GATE_RELAY_CLK_ENABLE()         __HAL_RCC_GPIOB_CLK_ENABLE();
 #define GATE_RELAY_GPIO_PORT            GPIOA
-#define GATE_RELAY_GPIO_PIN             GPIO_PIN_2
+#define GATE_RELAY_GPIO_PIN             GPIO_PIN_0
 //---------------------------------------------------------------
-#define CAR_GATE_RELAY_CLK_ENABLE()     __HAL_RCC_GPIOA_CLK_ENABLE();
+#define CAR_GATE_RELAY_CLK_ENABLE()     __HAL_RCC_GPIOB_CLK_ENABLE();
 #define CAR_GATE_RELAY_GPIO_PORT        GPIOA
-#define CAR_GATE_RELAY_GPIO_PIN         GPIO_PIN_3
+#define CAR_GATE_RELAY_GPIO_PIN         GPIO_PIN_1
 
 
 //===============================================================
@@ -330,100 +330,6 @@ static uint8_t  USBH_USR_ApplicationState = USBH_USR_FS_INIT;
 
 
 // HAL_NVIC_SystemReset();
-
-
-/*
-TIM_HandleTypeDef    TimHandle;
-uint32_t uwPrescalerValue = 0;
-TIM_OnePulse_InitTypeDef sConfig;
-
-int
-main(void) {
-  HAL_Init();
-  SystemClock_Config();
-  BSP_LED_Init(LED3);
-
-//  ##2 Compute the prescaler value, to have TIM4Freq = 25000000 Hz
-//
-//  TIM4 input clock is set to APB1 clock (PCLK1),
-//  if (APB1 prescaler = 1) x1 else x2
-//  prescaler is 2.
-//  TIM1CLK = (HCLK/2) x2 = HCLK
-//  TIM4CLK = SystemCoreClock
-//
-//  Prescaler = (TIM4CLK/TIM4 counter clock) - 1
-//
-//  The prescaler value is computed in order to have TIM4 counter clock
-//  set at 25000000 Hz.
-
-  uwPrescalerValue = (uint32_t)((SystemCoreClock) / 25000000) - 1;
-
-//  ##-3- Configure the TIM peripheral #######################################
-//
-//  -The external signal is connected to TIM4_CH2 pin (PB.07),
-//   and a rising edge on this input is used to trigger the Timer.
-//
-//  -The One Pulse signal is output on TIM4_CH1 (PB.06).
-//
-//  The delay value is fixed to:
-//  - Delay =  CCR1/TIM4 counter clock
-//          = 16383 / 25000000 [sec]
-//
-//  The pulse value is fixed to :
-//  - Pulse value = (TIM_Period - TIM_Pulse)/TIM4 counter clock
-//                = (65535 - 16383) / 25000000 [sec]
-
-  TimHandle.Instance = TIMx;
-
-  TimHandle.Init.Period            = 0xFFFF;
-  TimHandle.Init.Prescaler         = uwPrescalerValue;
-  TimHandle.Init.ClockDivision     = 0;
-  TimHandle.Init.CounterMode       = TIM_COUNTERMODE_UP;
-  TimHandle.Init.RepetitionCounter = 0;
-  TimHandle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-
-  if (HAL_TIM_OnePulse_Init(&TimHandle, TIM_OPMODE_SINGLE) != HAL_OK) {
-    Error_Handler();
-  }
-
-//  ##-2- Configure the Channel 1 in One Pulse mode ##########################
-  sConfig.OCMode       = TIM_OCMODE_PWM2;
-  sConfig.OCPolarity   = TIM_OCPOLARITY_HIGH;
-  sConfig.Pulse        = 16383;
-  sConfig.ICPolarity   = TIM_ICPOLARITY_RISING;
-  sConfig.ICSelection  = TIM_ICSELECTION_DIRECTTI;
-  sConfig.ICFilter     = 0;
-  sConfig.OCNPolarity  = TIM_OCNPOLARITY_HIGH;
-  sConfig.OCIdleState  = TIM_OCIDLESTATE_RESET;
-  sConfig.OCNIdleState = TIM_OCNIDLESTATE_RESET;
-
-  if (HAL_TIM_OnePulse_ConfigChannel(&TimHandle, &sConfig, TIM_CHANNEL_1, TIM_CHANNEL_2) != HAL_OK) {
-    Error_Handler();
-  }
-
-//  ##-4- Start the One Pulse mode #######################################
-//
-//   * The one pulse waveform can be displayed using an oscilloscope and it looks
-//   like this.
-//
-//                                ____
-//                                |   |
-//   CH2 _________________________|   |_________________________________________
-//
-//                                              ___________________________
-//                                             |                           |
-//   CH1 ______________________________________|                           |____
-//                               <---Delay----><------Pulse--------------->
-
-
-  if (HAL_TIM_OnePulse_Start(&TimHandle, TIM_CHANNEL_1) != HAL_OK) {
-    Error_Handler();
-  }
-
-  while (1) {
-  }
-}
-*/
 
 
 int
@@ -900,9 +806,32 @@ PushButton_Init(GPIO_TypeDef* Port, uint32_t Pin, IRQn_Type Irq) {
 }
 
 
+// TIM3
+// 16-bit up, down, up/down auto-reload counter
+// 16-bit programmable prescaler to divide the counter clock frequency
+// Up to 4 independent channels for:
+// – PWM generation (Edge- and Center-aligned modes)
 
 void
 Relay_Init(GPIO_TypeDef* Port, uint32_t Pin) {
+//    TIM_HandleTypeDef Tim3Handle;
+//    uint32_t uwPrescalerValue = 0;
+//    TIM_OnePulse_InitTypeDef sConfig;
+//    // Compute the prescaler value, to have TIM3Freq = 10KHz
+//    uwPrescalerValue = (uint32_t)((SystemCoreClock) / 10000) - 1;
+
+//    Tim3Handle.Instance = TIM3;
+
+//    Tim3Handle.Init.Period            = 0xFFFF;
+//    Tim3Handle.Init.Prescaler         = uwPrescalerValue;
+//    Tim3Handle.Init.ClockDivision     = 0;
+//    Tim3Handle.Init.CounterMode       = TIM_COUNTERMODE_UP;
+//    Tim3Handle.Init.RepetitionCounter = 0;
+//    Tim3Handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+//    if (HAL_TIM_OnePulse_Init(&Tim3Handle, TIM_OPMODE_SINGLE) != HAL_OK) {
+//      Error_Handler();
+//    }
+
     GPIO_InitTypeDef GPIO_InitStruct;
 
     GPIO_InitStruct.Pin   = Pin;
