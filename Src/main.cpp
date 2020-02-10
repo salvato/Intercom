@@ -161,18 +161,22 @@
 
 
 //===============================================================
-// Relays (We use TIM3 to produce a pulse long enough)
+// Relays (We use TIM3 to produce a long enough pulse)
 //===============================================================
+// PB4      Free1 Relay             TIM3 CH1
+// PB5      Free2 Relay             TIM3 CH2
 // PB0      Gate Relay              TIM3 CH3
 // PB1      Car Gate Relay          TIM3 CH4
 //===============================================================
-#define GATE_RELAY_CLK_ENABLE()         __HAL_RCC_GPIOB_CLK_ENABLE();
-#define GATE_RELAY_GPIO_PORT            GPIOA
-#define GATE_RELAY_GPIO_PIN             GPIO_PIN_0
+#define GATE_RELAY_CLK_ENABLE()             __HAL_RCC_TIM3_CLK_ENABLE()
+#define GATE_RELAY_GPIO_CLK_ENABLE()        __HAL_RCC_GPIOB_CLK_ENABLE()
+#define GATE_RELAY_GPIO_PORT                GPIOB
+#define GATE_RELAY_GPIO_PIN                 GPIO_PIN_0
 //---------------------------------------------------------------
-#define CAR_GATE_RELAY_CLK_ENABLE()     __HAL_RCC_GPIOB_CLK_ENABLE();
-#define CAR_GATE_RELAY_GPIO_PORT        GPIOA
-#define CAR_GATE_RELAY_GPIO_PIN         GPIO_PIN_1
+#define CAR_GATE_RELAY_CLK_ENABLE()         __HAL_RCC_TIM3_CLK_ENABLE()
+#define CAR_GATE_RELAY_GPIO_CLK_ENABLE()    __HAL_RCC_GPIOB_CLK_ENABLE()
+#define CAR_GATE_RELAY_GPIO_PORT            GPIOB
+#define CAR_GATE_RELAY_GPIO_PIN             GPIO_PIN_1
 
 
 //===============================================================
@@ -227,10 +231,10 @@ typedef enum {
 static void SystemClock_Config(void);
 static void InitConfigPin();
 static void PushButton_Init(GPIO_TypeDef* Port, uint32_t Pin, IRQn_Type Irq);
-static void Relay_Init(GPIO_TypeDef* Port, uint32_t Pin);
+static void relayGPIOInit(GPIO_TypeDef* Port, uint32_t Pin);
 static void initLeds();
-static void InitADC();
-static void Init_TIM2_Adc(void);
+static void adcInit();
+static void adcTIM2Init(void);
 static void initBuffers(bool isBaseStation);
 static void setRole(bool bPTX);
 static void ledsOff();
@@ -244,12 +248,14 @@ static void startAlarm();
 static bool updateAlarm();
 static void stopAlarm();
 static void processCommand(Commands command);
+static void relayTIM3Init(void);
 
 
 char buf[255];
 
 
 TIM_HandleTypeDef  Tim2Handle;
+TIM_HandleTypeDef  Tim3Handle;
 ADC_HandleTypeDef  hAdc;
 USBH_HandleTypeDef hUSB_Host; // USB Host handle
 extern HCD_HandleTypeDef hhcd; // defined in usbh_conf.c
@@ -332,6 +338,58 @@ static uint8_t  USBH_USR_ApplicationState = USBH_USR_FS_INIT;
 // HAL_NVIC_SystemReset();
 
 
+void
+relayTIM3Init(void) {
+  TIM_ClockConfigTypeDef  sClockSourceConfig;
+  TIM_MasterConfigTypeDef sMasterConfig;
+  TIM_OC_InitTypeDef      sConfigOC;
+
+  __HAL_RCC_TIM3_CLK_ENABLE();
+
+  // Compute the prescaler value, to have TIM3Freq = 10KHz
+  uint32_t uwPrescalerValue = (uint32_t)((SystemCoreClock/2) / 10000) - 1;
+
+  Tim3Handle.Instance = TIM3;
+  Tim3Handle.Init.Prescaler     = uwPrescalerValue;
+  Tim3Handle.Init.CounterMode   = TIM_COUNTERMODE_UP;
+  Tim3Handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  Tim3Handle.Init.Period        = 0xffff;
+  Tim3Handle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  if (HAL_TIM_Base_Init(&Tim3Handle) != HAL_OK) {
+    Error_Handler();
+  }
+
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&Tim3Handle, &sClockSourceConfig) != HAL_OK) {
+    Error_Handler();
+  }
+
+  if (HAL_TIM_OC_Init(&Tim3Handle) != HAL_OK) {
+    Error_Handler();
+  }
+
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&Tim3Handle, &sMasterConfig) != HAL_OK) {
+    Error_Handler();
+  }
+
+  sConfigOC.Pulse      = 9999;
+  sConfigOC.OCMode     = TIM_OCMODE_ACTIVE;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_OC_ConfigChannel(&Tim3Handle, &sConfigOC, TIM_CHANNEL_3) != HAL_OK) {
+    Error_Handler();
+  }
+
+  HAL_NVIC_SetPriority(TIM3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(TIM3_IRQn);
+}
+
+
+
+
+
 int
 main(void) {
     const uint8_t Channel = 76;
@@ -340,6 +398,25 @@ main(void) {
     HAL_Init();
     initLeds();
     SystemClock_Config();
+
+    relayTIM3Init();
+    GATE_RELAY_GPIO_CLK_ENABLE();
+    relayGPIOInit(GATE_RELAY_GPIO_PORT, GATE_RELAY_GPIO_PIN);
+    CAR_GATE_RELAY_GPIO_CLK_ENABLE();
+    relayGPIOInit(CAR_GATE_RELAY_GPIO_PORT, CAR_GATE_RELAY_GPIO_PIN);
+
+    BSP_LED_On(LED4);
+    TIM3->CCR3 = TIM3->CNT + 500;
+    __HAL_TIM_CLEAR_IT(&Tim3Handle, TIM_IT_CC3 | TIM_IT_CC4);
+    if(HAL_TIM_OC_Start_IT(&Tim3Handle, TIM_CHANNEL_3) != HAL_OK) {
+      Error_Handler();
+    }
+
+    while(1) {
+    }
+
+
+
     // Are we Base or Remote ?
     InitConfigPin();
     isBaseStation = HAL_GPIO_ReadPin(CONFIGURE_PORT, CONFIGURE_PIN);
@@ -355,10 +432,11 @@ main(void) {
     PHONE_BUTTON_CLK_ENABLE();
     PushButton_Init(PHONE_BUTTON_GPIO_PORT, PHONE_BUTTON_GPIO_PIN, PHONE_BUTTON_IRQ);
     if(isBaseStation) {
+        relayTIM3Init();
         GATE_RELAY_CLK_ENABLE();
-        Relay_Init(GATE_RELAY_GPIO_PORT, GATE_RELAY_GPIO_PIN);
+        relayGPIOInit(GATE_RELAY_GPIO_PORT, GATE_RELAY_GPIO_PIN);
         CAR_GATE_RELAY_CLK_ENABLE();
-        Relay_Init(CAR_GATE_RELAY_GPIO_PORT, CAR_GATE_RELAY_GPIO_PIN);
+        relayGPIOInit(CAR_GATE_RELAY_GPIO_PORT, CAR_GATE_RELAY_GPIO_PIN);
     }
     else {
         GATE_BUTTON_CLK_ENABLE();
@@ -569,8 +647,8 @@ processBase() {
     rf24.flush_rx();
     rf24.setRetries(1, 0); // We have to be fast !!!
     bRadioDataAvailable = false;
-    InitADC();
-    Init_TIM2_Adc();
+    adcInit();
+    adcTIM2Init();
     // Enables ADC DMA requests and enables ADC peripheral
     if(HAL_ADC_Start_DMA(&hAdc, (uint32_t*)adcDataIn, 2*MAX_PAYLOAD_SIZE) != HAL_OK) {
         Error_Handler();
@@ -807,37 +885,15 @@ PushButton_Init(GPIO_TypeDef* Port, uint32_t Pin, IRQn_Type Irq) {
 
 
 // TIM3
-// 16-bit up, down, up/down auto-reload counter
-// 16-bit programmable prescaler to divide the counter clock frequency
-// Up to 4 independent channels for:
-// – PWM generation (Edge- and Center-aligned modes)
-
 void
-Relay_Init(GPIO_TypeDef* Port, uint32_t Pin) {
-//    TIM_HandleTypeDef Tim3Handle;
-//    uint32_t uwPrescalerValue = 0;
-//    TIM_OnePulse_InitTypeDef sConfig;
-//    // Compute the prescaler value, to have TIM3Freq = 10KHz
-//    uwPrescalerValue = (uint32_t)((SystemCoreClock) / 10000) - 1;
-
-//    Tim3Handle.Instance = TIM3;
-
-//    Tim3Handle.Init.Period            = 0xFFFF;
-//    Tim3Handle.Init.Prescaler         = uwPrescalerValue;
-//    Tim3Handle.Init.ClockDivision     = 0;
-//    Tim3Handle.Init.CounterMode       = TIM_COUNTERMODE_UP;
-//    Tim3Handle.Init.RepetitionCounter = 0;
-//    Tim3Handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-//    if (HAL_TIM_OnePulse_Init(&Tim3Handle, TIM_OPMODE_SINGLE) != HAL_OK) {
-//      Error_Handler();
-//    }
-
+relayGPIOInit(GPIO_TypeDef* Port, uint32_t Pin) {
     GPIO_InitTypeDef GPIO_InitStruct;
 
-    GPIO_InitStruct.Pin   = Pin;
-    GPIO_InitStruct.Pull  = GPIO_PULLDOWN;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FAST;
-    GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pin       = Pin;
+    GPIO_InitStruct.Pull      = GPIO_NOPULL;
+    GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_LOW;
+    GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Alternate = GPIO_AF2_TIM3;
     HAL_GPIO_Init(Port, &GPIO_InitStruct);
     HAL_GPIO_WritePin(Port, Pin, GPIO_PIN_RESET);
 }
@@ -956,7 +1012,7 @@ HAL_ADC_MspInit(ADC_HandleTypeDef* hadc) {
 // The output register of the ADCs is a 16 bit register
 // even when the resolution is <= 8 bit
 void
-InitADC() {
+adcInit() {
     hAdc.Instance = ADC1;
 
     hAdc.Init.ClockPrescaler        = ADC_CLOCKPRESCALER_PCLK_DIV2;
@@ -986,7 +1042,7 @@ InitADC() {
 
 // Timer2 provides periodic triggers to start ADC conversion
 void
-Init_TIM2_Adc(void) {
+adcTIM2Init(void) {
     TIM_ClockConfigTypeDef sClockSourceConfig;
     TIM_MasterConfigTypeDef sMasterConfig;
     // Clock enable
@@ -1227,6 +1283,24 @@ void
 I2S2_IRQHandler(void) {
     HAL_DMA_IRQHandler(hAudioInI2s.hdmarx);
 }
+
+
+void
+HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim) {
+    UNUSED(htim);
+    if (__HAL_TIM_GET_IT_SOURCE(htim, TIM_FLAG_CC3) != RESET) {
+        BSP_LED_Toggle(LED4);
+        TIM3->CCR3 = TIM3->CNT + 500;
+        //HAL_TIM_OC_Stop_IT(htim, TIM_CHANNEL_3);
+    }
+}
+
+
+void
+TIM3_IRQHandler(void) {
+    HAL_TIM_IRQHandler(&Tim3Handle);
+}
+
 
 
 void

@@ -72,6 +72,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
 void I2S3_IRQHandler(void);
 void I2S2_IRQHandler(void);
 void OTG_FS_IRQHandler(void);
+void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim);
+void TIM3_IRQHandler(void);
 void COMMAND_AudioExecuteApplication(void);
 void MSC_Application(void);
 
