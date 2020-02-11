@@ -175,18 +175,18 @@
 #define FREE1_RELAY_GPIO_CLK_ENABLE()       __HAL_RCC_GPIOB_CLK_ENABLE()
 #define FREE1_RELAY_GPIO_PORT               GPIOB
 #define FREE1_RELAY_GPIO_PIN                GPIO_PIN_4
-//---------------------------------------------------------------
-#define FREE2_RELAY_CLK_ENABLE()            __HAL_RCC_TIM3_CLK_ENABLE()
-#define FREE2_RELAY_TIM_CHANNEL             TIM_CHANNEL_2
-#define FREE2_RELAY_GPIO_CLK_ENABLE()       __HAL_RCC_GPIOB_CLK_ENABLE()
-#define FREE2_RELAY_GPIO_PORT               GPIOB
-#define FREE2_RELAY_GPIO_PIN                GPIO_PIN_5
 //------ Can't be used: Conflicting with the Phone Button ------
-//#define GATE_RELAY_CLK_ENABLE()             __HAL_RCC_TIM3_CLK_ENABLE()
-//#define GATE_RELAY_TIM_CHANNEL              TIM_CHANNEL_3
-//#define GATE_RELAY_GPIO_CLK_ENABLE()        __HAL_RCC_GPIOB_CLK_ENABLE()
-//#define GATE_RELAY_GPIO_PORT                GPIOB
-//#define GATE_RELAY_GPIO_PIN                 GPIO_PIN_0
+//#define FREE2_RELAY_CLK_ENABLE()            __HAL_RCC_TIM3_CLK_ENABLE()
+//#define FREE2_RELAY_TIM_CHANNEL             TIM_CHANNEL_3
+//#define FREE2_RELAY_GPIO_CLK_ENABLE()       __HAL_RCC_GPIOB_CLK_ENABLE()
+//#define FREE2_RELAY_GPIO_PORT               GPIOB
+//#define FREE2_RELAY_GPIO_PIN                GPIO_PIN_0
+//---------------------------------------------------------------
+#define GATE_RELAY_CLK_ENABLE()             __HAL_RCC_TIM3_CLK_ENABLE()
+#define GATE_RELAY_TIM_CHANNEL              TIM_CHANNEL_2
+#define GATE_RELAY_GPIO_CLK_ENABLE()        __HAL_RCC_GPIOB_CLK_ENABLE()
+#define GATE_RELAY_GPIO_PORT                GPIOB
+#define GATE_RELAY_GPIO_PIN                 GPIO_PIN_5
 //---------------------------------------------------------------
 #define CAR_GATE_RELAY_CLK_ENABLE()         __HAL_RCC_TIM3_CLK_ENABLE()
 #define CAR_GATE_RELAY_TIM_CHANNEL          TIM_CHANNEL_4
@@ -523,10 +523,10 @@ pulseRelay(uint32_t relayChannel, uint16_t msPulse) {
         port = FREE1_RELAY_GPIO_PORT;
         pin  = FREE1_RELAY_GPIO_PIN;
     }
-    if(relayChannel == FREE2_RELAY_TIM_CHANNEL) {
-        port = FREE2_RELAY_GPIO_PORT;
-        pin  = FREE2_RELAY_GPIO_PIN;
-    }
+//    if(relayChannel == FREE2_RELAY_TIM_CHANNEL) {
+//        port = FREE2_RELAY_GPIO_PORT;
+//        pin  = FREE2_RELAY_GPIO_PIN;
+//    }
     if(relayChannel == GATE_RELAY_TIM_CHANNEL) {
         port = GATE_RELAY_GPIO_PORT;
         pin  = GATE_RELAY_GPIO_PIN;
@@ -1361,11 +1361,11 @@ HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim) {
         pin  = FREE1_RELAY_GPIO_PIN;
         channel = FREE1_RELAY_TIM_CHANNEL;
     }
-    if(__HAL_TIM_GET_IT_SOURCE(htim, TIM_FLAG_CC2) != RESET) {
-        port = FREE2_RELAY_GPIO_PORT;
-        pin  = FREE2_RELAY_GPIO_PIN;
-        channel = FREE2_RELAY_TIM_CHANNEL;
-    }
+//    if(__HAL_TIM_GET_IT_SOURCE(htim, TIM_FLAG_CC2) != RESET) {
+//        port = FREE2_RELAY_GPIO_PORT;
+//        pin  = FREE2_RELAY_GPIO_PIN;
+//        channel = FREE2_RELAY_TIM_CHANNEL;
+//    }
     if(__HAL_TIM_GET_IT_SOURCE(htim, TIM_FLAG_CC3) != RESET) {
         port = GATE_RELAY_GPIO_PORT;
         pin  = GATE_RELAY_GPIO_PIN;
