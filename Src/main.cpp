@@ -168,12 +168,26 @@
 // PB0      Gate Relay              TIM3 CH3
 // PB1      Car Gate Relay          TIM3 CH4
 //===============================================================
+#define FREE1_RELAY_CLK_ENABLE()            __HAL_RCC_TIM3_CLK_ENABLE()
+#define FREE1_RELAY_TIM_CHANNEL             TIM_CHANNEL_1
+#define FREE1_RELAY_GPIO_CLK_ENABLE()       __HAL_RCC_GPIOB_CLK_ENABLE()
+#define FREE1_RELAY_GPIO_PORT               GPIOB
+#define FREE1_RELAY_GPIO_PIN                GPIO_PIN_4
+//---------------------------------------------------------------
+#define FREE2_RELAY_CLK_ENABLE()            __HAL_RCC_TIM3_CLK_ENABLE()
+#define FREE2_RELAY_TIM_CHANNEL             TIM_CHANNEL_2
+#define FREE2_RELAY_GPIO_CLK_ENABLE()       __HAL_RCC_GPIOB_CLK_ENABLE()
+#define FREE2_RELAY_GPIO_PORT               GPIOB
+#define FREE2_RELAY_GPIO_PIN                GPIO_PIN_5
+//---------------------------------------------------------------
 #define GATE_RELAY_CLK_ENABLE()             __HAL_RCC_TIM3_CLK_ENABLE()
+#define GATE_RELAY_TIM_CHANNEL              TIM_CHANNEL_3
 #define GATE_RELAY_GPIO_CLK_ENABLE()        __HAL_RCC_GPIOB_CLK_ENABLE()
 #define GATE_RELAY_GPIO_PORT                GPIOB
 #define GATE_RELAY_GPIO_PIN                 GPIO_PIN_0
 //---------------------------------------------------------------
 #define CAR_GATE_RELAY_CLK_ENABLE()         __HAL_RCC_TIM3_CLK_ENABLE()
+#define CAR_GATE_RELAY_TIM_CHANNEL          TIM_CHANNEL_4
 #define CAR_GATE_RELAY_GPIO_CLK_ENABLE()    __HAL_RCC_GPIOB_CLK_ENABLE()
 #define CAR_GATE_RELAY_GPIO_PORT            GPIOB
 #define CAR_GATE_RELAY_GPIO_PIN             GPIO_PIN_1
@@ -248,7 +262,8 @@ static void startAlarm();
 static bool updateAlarm();
 static void stopAlarm();
 static void processCommand(Commands command);
-static void relayTIM3Init(void);
+static void relayTIM3Init();
+static void pulseRelay(uint32_t relayChannel, uint16_t msPulse);
 
 
 char buf[255];
@@ -338,62 +353,12 @@ static uint8_t  USBH_USR_ApplicationState = USBH_USR_FS_INIT;
 // HAL_NVIC_SystemReset();
 
 
-void
-relayTIM3Init(void) {
-  TIM_ClockConfigTypeDef  sClockSourceConfig;
-  TIM_MasterConfigTypeDef sMasterConfig;
-  TIM_OC_InitTypeDef      sConfigOC;
-
-  __HAL_RCC_TIM3_CLK_ENABLE();
-
-  // Compute the prescaler value, to have TIM3Freq = 10KHz
-  uint32_t uwPrescalerValue = (uint32_t)((SystemCoreClock/2) / 10000) - 1;
-
-  Tim3Handle.Instance = TIM3;
-  Tim3Handle.Init.Prescaler     = uwPrescalerValue;
-  Tim3Handle.Init.CounterMode   = TIM_COUNTERMODE_UP;
-  Tim3Handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  Tim3Handle.Init.Period        = 0xffff;
-  Tim3Handle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  if (HAL_TIM_Base_Init(&Tim3Handle) != HAL_OK) {
-    Error_Handler();
-  }
-
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&Tim3Handle, &sClockSourceConfig) != HAL_OK) {
-    Error_Handler();
-  }
-
-  if (HAL_TIM_OC_Init(&Tim3Handle) != HAL_OK) {
-    Error_Handler();
-  }
-
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&Tim3Handle, &sMasterConfig) != HAL_OK) {
-    Error_Handler();
-  }
-
-  sConfigOC.Pulse      = 9999;
-  sConfigOC.OCMode     = TIM_OCMODE_ACTIVE;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_OC_ConfigChannel(&Tim3Handle, &sConfigOC, TIM_CHANNEL_3) != HAL_OK) {
-    Error_Handler();
-  }
-
-  HAL_NVIC_SetPriority(TIM3_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(TIM3_IRQn);
-}
-
-
-
-
 
 int
 main(void) {
     const uint8_t Channel = 76;
     Volume = 70; // % of Max
+    uint16_t relayPulse_ms = 500;
     // System startup
     HAL_Init();
     initLeds();
@@ -405,14 +370,9 @@ main(void) {
     CAR_GATE_RELAY_GPIO_CLK_ENABLE();
     relayGPIOInit(CAR_GATE_RELAY_GPIO_PORT, CAR_GATE_RELAY_GPIO_PIN);
 
-    BSP_LED_On(LED4);
-    TIM3->CCR3 = TIM3->CNT + 500;
-    __HAL_TIM_CLEAR_IT(&Tim3Handle, TIM_IT_CC3 | TIM_IT_CC4);
-    if(HAL_TIM_OC_Start_IT(&Tim3Handle, TIM_CHANNEL_3) != HAL_OK) {
-      Error_Handler();
-    }
-
     while(1) {
+        pulseRelay(GATE_RELAY_TIM_CHANNEL, relayPulse_ms);
+        HAL_Delay(1000);
     }
 
 
@@ -457,6 +417,84 @@ main(void) {
             processRemote();
         }
     }
+}
+
+
+void
+relayTIM3Init() {// pulseDuration in msec
+  TIM_ClockConfigTypeDef  sClockSourceConfig;
+  TIM_MasterConfigTypeDef sMasterConfig;
+  TIM_OC_InitTypeDef      sConfigOC;
+
+  __HAL_RCC_TIM3_CLK_ENABLE();
+
+  // Compute the prescaler value, to have TIM3Freq = 1KHz
+  uint32_t uwPrescalerValue = (uint32_t)((SystemCoreClock/2) / 1000) - 1;
+
+  Tim3Handle.Instance = TIM3;
+  Tim3Handle.Init.Prescaler     = uwPrescalerValue;
+  Tim3Handle.Init.CounterMode   = TIM_COUNTERMODE_UP;
+  Tim3Handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  Tim3Handle.Init.Period        = 0xffff;
+  Tim3Handle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  if (HAL_TIM_Base_Init(&Tim3Handle) != HAL_OK) {
+    Error_Handler();
+  }
+
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&Tim3Handle, &sClockSourceConfig) != HAL_OK) {
+    Error_Handler();
+  }
+
+  if (HAL_TIM_OC_Init(&Tim3Handle) != HAL_OK) {
+    Error_Handler();
+  }
+
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&Tim3Handle, &sMasterConfig) != HAL_OK) {
+    Error_Handler();
+  }
+
+  sConfigOC.Pulse      = 999; // overwritten
+  sConfigOC.OCMode     = TIM_OCMODE_TIMING;
+  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if (HAL_TIM_OC_ConfigChannel(&Tim3Handle, &sConfigOC, TIM_CHANNEL_ALL) != HAL_OK) {
+    Error_Handler();
+  }
+
+  HAL_NVIC_SetPriority(TIM3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(TIM3_IRQn);
+}
+
+
+void
+pulseRelay(uint32_t relayChannel, uint16_t msPulse) {
+    TIM3->CCR3 = TIM3->CNT + msPulse;
+    __HAL_TIM_CLEAR_IT(&Tim3Handle, relayChannel);
+    if(HAL_TIM_OC_Start_IT(&Tim3Handle, relayChannel) != HAL_OK) {
+      Error_Handler();
+    }
+    GPIO_TypeDef* port;
+    uint32_t pin;
+    if(relayChannel == FREE1_RELAY_TIM_CHANNEL) {
+        port = FREE1_RELAY_GPIO_PORT;
+        pin  = FREE1_RELAY_GPIO_PIN;
+    }
+    if(relayChannel == FREE2_RELAY_TIM_CHANNEL) {
+        port = FREE2_RELAY_GPIO_PORT;
+        pin  = FREE2_RELAY_GPIO_PIN;
+    }
+    if(relayChannel == GATE_RELAY_TIM_CHANNEL) {
+        port = GATE_RELAY_GPIO_PORT;
+        pin  = GATE_RELAY_GPIO_PIN;
+    }
+    if(relayChannel == CAR_GATE_RELAY_TIM_CHANNEL) {
+        port = CAR_GATE_RELAY_GPIO_PORT;
+        pin  = CAR_GATE_RELAY_GPIO_PIN;
+    }
+    HAL_GPIO_WritePin(port, pin, GPIO_PIN_SET);
 }
 
 
@@ -890,10 +928,9 @@ relayGPIOInit(GPIO_TypeDef* Port, uint32_t Pin) {
     GPIO_InitTypeDef GPIO_InitStruct;
 
     GPIO_InitStruct.Pin       = Pin;
-    GPIO_InitStruct.Pull      = GPIO_NOPULL;
+    GPIO_InitStruct.Pull      = GPIO_PULLDOWN;
     GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_LOW;
-    GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
-    GPIO_InitStruct.Alternate = GPIO_AF2_TIM3;
+    GPIO_InitStruct.Mode      = GPIO_MODE_OUTPUT_PP;
     HAL_GPIO_Init(Port, &GPIO_InitStruct);
     HAL_GPIO_WritePin(Port, Pin, GPIO_PIN_RESET);
 }
@@ -1078,7 +1115,6 @@ adcTIM2Init(void) {
 
 
 // extern "C" {
-
 
 void
 OTG_FS_IRQHandler(void) {
@@ -1287,12 +1323,31 @@ I2S2_IRQHandler(void) {
 
 void
 HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim) {
-    UNUSED(htim);
-    if (__HAL_TIM_GET_IT_SOURCE(htim, TIM_FLAG_CC3) != RESET) {
-        BSP_LED_Toggle(LED4);
-        TIM3->CCR3 = TIM3->CNT + 500;
-        //HAL_TIM_OC_Stop_IT(htim, TIM_CHANNEL_3);
+    GPIO_TypeDef* port;
+    uint32_t pin;
+    uint32_t channel;
+    if(__HAL_TIM_GET_IT_SOURCE(htim, TIM_FLAG_CC1) != RESET) {
+        port = FREE1_RELAY_GPIO_PORT;
+        pin  = FREE1_RELAY_GPIO_PIN;
+        channel = FREE1_RELAY_TIM_CHANNEL;
     }
+    if(__HAL_TIM_GET_IT_SOURCE(htim, TIM_FLAG_CC2) != RESET) {
+        port = FREE2_RELAY_GPIO_PORT;
+        pin  = FREE2_RELAY_GPIO_PIN;
+        channel = FREE2_RELAY_TIM_CHANNEL;
+    }
+    if(__HAL_TIM_GET_IT_SOURCE(htim, TIM_FLAG_CC3) != RESET) {
+        port = GATE_RELAY_GPIO_PORT;
+        pin  = GATE_RELAY_GPIO_PIN;
+        channel = GATE_RELAY_TIM_CHANNEL;
+    }
+    if(__HAL_TIM_GET_IT_SOURCE(htim, TIM_FLAG_CC4) != RESET) {
+        port = CAR_GATE_RELAY_GPIO_PORT;
+        pin  = CAR_GATE_RELAY_GPIO_PIN;
+        channel = CAR_GATE_RELAY_TIM_CHANNEL;
+    }
+    HAL_GPIO_WritePin(port, pin, GPIO_PIN_RESET);
+    HAL_TIM_OC_Stop_IT(htim, channel);
 }
 
 
