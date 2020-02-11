@@ -1173,10 +1173,10 @@ HAL_ADC_ErrorCallback(ADC_HandleTypeDef *hadc) {
 void
 BSP_AUDIO_OUT_TransferComplete_CallBack(void) {
     if(bConnectionAccepted) {
-        // Transfer last received chunk
+        // Send the last received chunk to DAC
         offset = chunk*MAX_PAYLOAD_SIZE*2;
         BSP_AUDIO_OUT_ChangeBuffer(&Audio_Out_Buffer[offset], 2*MAX_PAYLOAD_SIZE);
-        // Prepare for next chunk
+        // Be ready for the next chunk
         chunk = 1-chunk;
         offset = chunk*MAX_PAYLOAD_SIZE*2;
         memset(&Audio_Out_Buffer[offset], 0, 2*MAX_PAYLOAD_SIZE*sizeof(*Audio_Out_Buffer));
@@ -1256,7 +1256,7 @@ HAL_SPI_ErrorCallback(SPI_HandleTypeDef *hspi) {
 
 void
 HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
-    if(GPIO_Pin == GPIO_PIN_0) {
+    if(GPIO_Pin == PHONE_BUTTON_GPIO_PIN) {
         if(isBaseStation) {
             startConnectTime = HAL_GetTick();
             bBaseSleeping = false;
@@ -1271,34 +1271,12 @@ HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
             }
         }
     }
+    if(GPIO_Pin == GATE_BUTTON_GPIO_PIN) {
 
-}
-
-
-// This function handles External line 0 interrupt request.
-void
-EXTI0_IRQHandler(void) {
-    if(isBaseStation) {
-        startConnectTime = HAL_GetTick();
-        bBaseSleeping = false;
     }
-    else {
-        if(bConnectionRequested) {
-            bConnectionRequested = false;
-            bConnectionAccepted = true;
-        }
-        else {
-            bSuspend = true;
-        }
+    if(GPIO_Pin == CAR_GATE_BUTTON_GPIO_PIN) {
+
     }
-    __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_0);
-}
-
-
-/// This function handles External line 1 interrupt request.
-void
-EXTI1_IRQHandler(void) {
-    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_1);
 }
 
 
@@ -1307,7 +1285,6 @@ void
 I2S3_IRQHandler(void) {
     HAL_DMA_IRQHandler(hAudioOutI2s.hdmatx);
 }
-
 
 
 /// This function handles DMA Stream interrupt request.
