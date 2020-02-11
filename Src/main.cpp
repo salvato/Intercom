@@ -181,12 +181,12 @@
 #define FREE2_RELAY_GPIO_CLK_ENABLE()       __HAL_RCC_GPIOB_CLK_ENABLE()
 #define FREE2_RELAY_GPIO_PORT               GPIOB
 #define FREE2_RELAY_GPIO_PIN                GPIO_PIN_5
-//---------------------------------------------------------------
-#define GATE_RELAY_CLK_ENABLE()             __HAL_RCC_TIM3_CLK_ENABLE()
-#define GATE_RELAY_TIM_CHANNEL              TIM_CHANNEL_3
-#define GATE_RELAY_GPIO_CLK_ENABLE()        __HAL_RCC_GPIOB_CLK_ENABLE()
-#define GATE_RELAY_GPIO_PORT                GPIOB
-#define GATE_RELAY_GPIO_PIN                 GPIO_PIN_0
+//------ Can't be used: Conflicting with the Phone Button ------
+//#define GATE_RELAY_CLK_ENABLE()             __HAL_RCC_TIM3_CLK_ENABLE()
+//#define GATE_RELAY_TIM_CHANNEL              TIM_CHANNEL_3
+//#define GATE_RELAY_GPIO_CLK_ENABLE()        __HAL_RCC_GPIOB_CLK_ENABLE()
+//#define GATE_RELAY_GPIO_PORT                GPIOB
+//#define GATE_RELAY_GPIO_PIN                 GPIO_PIN_0
 //---------------------------------------------------------------
 #define CAR_GATE_RELAY_CLK_ENABLE()         __HAL_RCC_TIM3_CLK_ENABLE()
 #define CAR_GATE_RELAY_TIM_CHANNEL          TIM_CHANNEL_4
@@ -235,9 +235,7 @@ typedef enum {
     suspendCmd,
     suspendAck,
     openGateCmd,
-    openGateAck,
     openCarGateCmd,
-    openCarGateAck
 } Commands;
 
 
