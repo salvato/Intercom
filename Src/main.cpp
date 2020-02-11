@@ -166,29 +166,25 @@
 // Relays (We use TIM3 to produce a long enough pulse)
 //===============================================================
 // PB4      Free1 Relay             TIM3 CH1
-// PB5      Free2 Relay             TIM3 CH2
-// PB0      Gate Relay              TIM3 CH3
+// PB5      Gate Relay              TIM3 CH2
+// PB0      Free2 Relay             TIM3 CH3
 // PB1      Car Gate Relay          TIM3 CH4
 //===============================================================
-#define FREE1_RELAY_CLK_ENABLE()            __HAL_RCC_TIM3_CLK_ENABLE()
 #define FREE1_RELAY_TIM_CHANNEL             TIM_CHANNEL_1
 #define FREE1_RELAY_GPIO_CLK_ENABLE()       __HAL_RCC_GPIOB_CLK_ENABLE()
 #define FREE1_RELAY_GPIO_PORT               GPIOB
 #define FREE1_RELAY_GPIO_PIN                GPIO_PIN_4
+//---------------------------------------------------------------
+#define GATE_RELAY_TIM_CHANNEL              TIM_CHANNEL_2
+#define GATE_RELAY_GPIO_CLK_ENABLE()        __HAL_RCC_GPIOB_CLK_ENABLE()
+#define GATE_RELAY_GPIO_PORT                GPIOB
+#define GATE_RELAY_GPIO_PIN                 GPIO_PIN_5
 //------ Can't be used: Conflicting with the Phone Button ------
-//#define FREE2_RELAY_CLK_ENABLE()            __HAL_RCC_TIM3_CLK_ENABLE()
 //#define FREE2_RELAY_TIM_CHANNEL             TIM_CHANNEL_3
 //#define FREE2_RELAY_GPIO_CLK_ENABLE()       __HAL_RCC_GPIOB_CLK_ENABLE()
 //#define FREE2_RELAY_GPIO_PORT               GPIOB
 //#define FREE2_RELAY_GPIO_PIN                GPIO_PIN_0
 //---------------------------------------------------------------
-#define GATE_RELAY_CLK_ENABLE()             __HAL_RCC_TIM3_CLK_ENABLE()
-#define GATE_RELAY_TIM_CHANNEL              TIM_CHANNEL_2
-#define GATE_RELAY_GPIO_CLK_ENABLE()        __HAL_RCC_GPIOB_CLK_ENABLE()
-#define GATE_RELAY_GPIO_PORT                GPIOB
-#define GATE_RELAY_GPIO_PIN                 GPIO_PIN_5
-//---------------------------------------------------------------
-#define CAR_GATE_RELAY_CLK_ENABLE()         __HAL_RCC_TIM3_CLK_ENABLE()
 #define CAR_GATE_RELAY_TIM_CHANNEL          TIM_CHANNEL_4
 #define CAR_GATE_RELAY_GPIO_CLK_ENABLE()    __HAL_RCC_GPIOB_CLK_ENABLE()
 #define CAR_GATE_RELAY_GPIO_PORT            GPIOB
@@ -311,11 +307,9 @@ uint16_t* Audio_Out_Buffer = NULL;
 uint16_t* pdmDataIn        = NULL;
 uint16_t* pcmDataOut       = NULL;
 uint16_t  offset;
-
-
 uint32_t chunk = 0;
+
 bool     isBaseStation;
-uint8_t  status;
 uint8_t  Volume;
 
 char path[] = "0:/";
@@ -373,12 +367,6 @@ main(void) {
     SystemClock_Config();
     timeoutTIM7Init();
 
-    relayTIM3Init();
-    GATE_RELAY_GPIO_CLK_ENABLE();
-    relayGPIOInit(GATE_RELAY_GPIO_PORT, GATE_RELAY_GPIO_PIN);
-    CAR_GATE_RELAY_GPIO_CLK_ENABLE();
-    relayGPIOInit(CAR_GATE_RELAY_GPIO_PORT, CAR_GATE_RELAY_GPIO_PIN);
-
     // Are we Base or Remote ?
     InitConfigPin();
     isBaseStation = HAL_GPIO_ReadPin(CONFIGURE_PORT, CONFIGURE_PIN);
@@ -395,9 +383,9 @@ main(void) {
     PushButton_Init(PHONE_BUTTON_GPIO_PORT, PHONE_BUTTON_GPIO_PIN, PHONE_BUTTON_IRQ);
     if(isBaseStation) {
         relayTIM3Init();
-        GATE_RELAY_CLK_ENABLE();
+        GATE_RELAY_GPIO_CLK_ENABLE();
         relayGPIOInit(GATE_RELAY_GPIO_PORT, GATE_RELAY_GPIO_PIN);
-        CAR_GATE_RELAY_CLK_ENABLE();
+        CAR_GATE_RELAY_GPIO_CLK_ENABLE();
         relayGPIOInit(CAR_GATE_RELAY_GPIO_PORT, CAR_GATE_RELAY_GPIO_PIN);
     }
     else {
@@ -406,9 +394,11 @@ main(void) {
         CAR_GATE_BUTTON_CLK_ENABLE();
         PushButton_Init(CAR_GATE_BUTTON_GPIO_PORT, CAR_GATE_BUTTON_GPIO_PIN, CAR_GATE_BUTTON_IRQ);
     }
+
     if(!rf24.begin(Channel, RADIO_IN_IRQ_PREPRIO)) Error_Handler();
     rf24.clearInterrupts();// Avoid false interrupts from Radio
     rf24.maskIRQ(false, false, false);
+
     while(true) {
         if(isBaseStation) {
             connectBase();// We will be woken up by a button press
@@ -419,6 +409,7 @@ main(void) {
             processRemote();
         }
     }
+
 }
 
 
@@ -434,11 +425,11 @@ relayTIM3Init() {
   uint32_t uwPrescalerValue = (uint32_t)((SystemCoreClock/2) / 1000) - 1;
 
   Tim3Handle.Instance = TIM3;
-  Tim3Handle.Init.Prescaler     = uwPrescalerValue;
-  Tim3Handle.Init.CounterMode   = TIM_COUNTERMODE_UP;
+  Tim3Handle.Init.Prescaler         = uwPrescalerValue;
+  Tim3Handle.Init.CounterMode       = TIM_COUNTERMODE_UP;
   Tim3Handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  Tim3Handle.Init.Period        = 0xffff;
-  Tim3Handle.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  Tim3Handle.Init.Period            = 0xffff;
+  Tim3Handle.Init.ClockDivision     = TIM_CLOCKDIVISION_DIV1;
   if (HAL_TIM_Base_Init(&Tim3Handle) != HAL_OK) {
     Error_Handler();
   }
@@ -458,7 +449,7 @@ relayTIM3Init() {
     Error_Handler();
   }
 
-  sConfigOC.Pulse      = 999; // overwritten
+  sConfigOC.Pulse      = 999; // will be overwritten
   sConfigOC.OCMode     = TIM_OCMODE_TIMING;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
@@ -512,11 +503,6 @@ startTimeout(uint16_t mSec) {
 
 void
 pulseRelay(uint32_t relayChannel, uint16_t msPulse) {
-    Tim3Handle.Instance->CCR3 = Tim3Handle.Instance->CNT + msPulse;
-    __HAL_TIM_CLEAR_IT(&Tim3Handle, relayChannel);
-    if(HAL_TIM_OC_Start_IT(&Tim3Handle, relayChannel) != HAL_OK) {
-      Error_Handler();
-    }
     GPIO_TypeDef* port;
     uint32_t pin;
     if(relayChannel == FREE1_RELAY_TIM_CHANNEL) {
@@ -535,7 +521,13 @@ pulseRelay(uint32_t relayChannel, uint16_t msPulse) {
         port = CAR_GATE_RELAY_GPIO_PORT;
         pin  = CAR_GATE_RELAY_GPIO_PIN;
     }
-    HAL_GPIO_WritePin(port, pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(port, pin, GPIO_PIN_SET); // will reset on interrupt service routine
+
+    Tim3Handle.Instance->CCR3 = Tim3Handle.Instance->CNT + msPulse;
+    __HAL_TIM_CLEAR_IT(&Tim3Handle, relayChannel);
+    if(HAL_TIM_OC_Start_IT(&Tim3Handle, relayChannel) != HAL_OK) {
+      Error_Handler();
+    }
 }
 
 
@@ -574,9 +566,12 @@ prepareFileSystem() {
     if(USBH_Start(&hUSB_Host) != USBH_OK) return false;
 
     USBH_USR_ApplicationState = USBH_USR_FS_INIT;
-    while(AppliState != APPLICATION_START) {
+    startTimeout(5000);
+    while(AppliState != APPLICATION_START && !bTimeElapsed) {
         USBH_Process(&hUSB_Host); // USBH_Background Process
     }
+    if(bTimeElapsed) // USB Disk not responding...
+        Error_Handler();
 
     // Initializes (mount) the File System
     if(f_mount(&USBDISKFatFs, (TCHAR const*)USBDISKPath, 0 ) != FR_OK ) return false;
@@ -596,7 +591,6 @@ void
 connectBase() {
     setRole(PTX);
     rf24.flush_tx();
-    // At first we don't need to be very fast but reliable
     rf24.setRetries(5, 15);
     bool bBaseConnected;
 
@@ -641,6 +635,7 @@ connectBase() {
             BSP_LED_Off(LED_BLUE);
         }
     } while(!bBaseConnected);
+    // Connection with the Remote established...
     BSP_LED_Off(LED_RED);
 }
 
@@ -710,6 +705,7 @@ connectRemote() {
 
         USBH_Process(&hUSB_Host); // USBH_Background Process
     } // while(!bRemoteConnected)
+    // Connection with the Base established...
     BSP_LED_Off(LED_RED);
 }
 
@@ -771,6 +767,7 @@ processBase() {
             Tim7Handle.Instance->CNT = 0;
         } // if(bRadioDataAvailable)
     } // while(!bSuspend && !bTimeElapsed)
+    // Connection terminated...
     HAL_TIM_Base_Stop(&Tim2Handle);
     BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio and power down the Codec
     ledsOff();
@@ -870,6 +867,7 @@ processRemote() {
         }
         USBH_Process(&hUSB_Host); // USBH_Background Process
     } while(!bBaseDisConnected && !bTimeElapsed);
+    // Connection terminated...
     ledsOff();
 }
 
@@ -968,7 +966,7 @@ PushButton_Init(GPIO_TypeDef* Port, uint32_t Pin, IRQn_Type Irq) {
     GPIO_InitStruct.Mode  = GPIO_MODE_IT_RISING;
     HAL_GPIO_Init(Port, &GPIO_InitStruct);
 
-    /* Enable and set Button EXTI Interrupt to the lowest priority */
+    // Enable and set Button EXTI Interrupt to the lowest priority
     HAL_NVIC_SetPriority(Irq, 0x0F, 0);
     HAL_NVIC_EnableIRQ(Irq);
 }
