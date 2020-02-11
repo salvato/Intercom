@@ -358,7 +358,7 @@ int
 main(void) {
     const uint8_t Channel = 76;
     Volume = 70; // % of Max
-    uint16_t relayPulse_ms = 500;
+
     // System startup
     HAL_Init();
     initLeds();
@@ -369,13 +369,6 @@ main(void) {
     relayGPIOInit(GATE_RELAY_GPIO_PORT, GATE_RELAY_GPIO_PIN);
     CAR_GATE_RELAY_GPIO_CLK_ENABLE();
     relayGPIOInit(CAR_GATE_RELAY_GPIO_PORT, CAR_GATE_RELAY_GPIO_PIN);
-
-    while(1) {
-        pulseRelay(GATE_RELAY_TIM_CHANNEL, relayPulse_ms);
-        HAL_Delay(1000);
-    }
-
-
 
     // Are we Base or Remote ?
     InitConfigPin();
@@ -828,8 +821,10 @@ void
 processCommand(Commands command) {
     switch(command) {
         case openGateCmd:
+            pulseRelay(GATE_RELAY_TIM_CHANNEL, 500);
             break;
         case openCarGateCmd:
+            pulseRelay(CAR_GATE_RELAY_TIM_CHANNEL, 500);
             break;
         default:
             break;
@@ -932,7 +927,7 @@ relayGPIOInit(GPIO_TypeDef* Port, uint32_t Pin) {
     GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_LOW;
     GPIO_InitStruct.Mode      = GPIO_MODE_OUTPUT_PP;
     HAL_GPIO_Init(Port, &GPIO_InitStruct);
-    HAL_GPIO_WritePin(Port, Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(Port, Pin, GPIO_PIN_SET);
 }
 
 
@@ -1279,31 +1274,32 @@ HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 
 }
 
-/// This function handles External line 0 interrupt request.
-//void
-//EXTI0_IRQHandler(void) {
-//    if(isBaseStation) {
-//        startConnectTime = HAL_GetTick();
-//        bBaseSleeping = false;
-//    }
-//    else {
-//        if(bConnectionRequested) {
-//            bConnectionRequested = false;
-//            bConnectionAccepted = true;
-//        }
-//        else {
-//            bSuspend = true;
-//        }
-//    }
-//    __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_0);
-//}
+
+// This function handles External line 0 interrupt request.
+void
+EXTI0_IRQHandler(void) {
+    if(isBaseStation) {
+        startConnectTime = HAL_GetTick();
+        bBaseSleeping = false;
+    }
+    else {
+        if(bConnectionRequested) {
+            bConnectionRequested = false;
+            bConnectionAccepted = true;
+        }
+        else {
+            bSuspend = true;
+        }
+    }
+    __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_0);
+}
 
 
-///// This function handles External line 1 interrupt request.
-//void
-//EXTI1_IRQHandler(void) {
-//    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_1);
-//}
+/// This function handles External line 1 interrupt request.
+void
+EXTI1_IRQHandler(void) {
+    HAL_GPIO_EXTI_IRQHandler(GPIO_PIN_1);
+}
 
 
 /// This function handles main I2S interrupt.
