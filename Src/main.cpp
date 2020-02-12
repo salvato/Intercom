@@ -53,7 +53,7 @@ typedef enum {
 // Local Functions
 //===============================================================
 static void SystemClock_Config(void);
-static void InitConfigPin();
+static void configPinInit();
 static void PushButton_Init(GPIO_TypeDef* Port, uint32_t Pin, IRQn_Type Irq);
 static void relayGPIOInit(GPIO_TypeDef* Port, uint32_t Pin);
 static void initLeds();
@@ -177,7 +177,7 @@ main(void) {
     timeoutTIM7Init();
 
     // Are we Base or Remote ?
-    InitConfigPin();
+    configPinInit();
     isBaseStation = HAL_GPIO_ReadPin(CONFIGURE_PORT, CONFIGURE_PIN);
     // Initialize the corresponding things..
     if(!isBaseStation) { // Prepare Wave file to Play
@@ -1193,11 +1193,13 @@ TIM3_IRQHandler(void) {
     HAL_TIM_IRQHandler(&Tim3Handle);
 }
 
+
 void
 HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     bTimeElapsed = true;
     HAL_TIM_Base_Stop(htim);
 }
+
 
 void
 TIM7_IRQHandler(void) {
@@ -1215,7 +1217,7 @@ initLeds() {
 
 
 void
-InitConfigPin() {
+configPinInit() {
     GPIO_InitTypeDef GPIO_InitStructure;
     // Initialize CONFIGURE_PIN as Input with Pulldown
     __HAL_RCC_GPIOC_CLK_ENABLE();
