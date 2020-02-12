@@ -30,7 +30,7 @@
 //===============================================================
 #define MAX_CONNECTION_TIME  60000
 #define MAX_WAIT_ACK_TIME    5000
-#define MAX_NO_SIGNAL_TIME   10000
+#define MAX_NO_SIGNAL_TIME   1000
 #define QUERY_INTERVAL       300
 
 // State Machine for the USBH_USR_ApplicationState
@@ -77,6 +77,7 @@ static void pulseRelay(uint32_t relayChannel, uint16_t msPulse);
 static void timeoutTIM7Init();
 static void startTimeout(uint16_t mSec);
 static void resetTimeout();
+static void stopTimeout();
 
 
 TIM_HandleTypeDef  Tim2Handle;
@@ -277,7 +278,7 @@ timeoutTIM7Init() {
 
     Tim7Handle.Init.Prescaler         = uwPrescalerValue;
     Tim7Handle.Init.CounterMode       = TIM_COUNTERMODE_UP;
-    Tim7Handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+    Tim7Handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
     Tim7Handle.Init.Period            = 0xffff;
     Tim7Handle.Init.ClockDivision     = TIM_CLOCKDIVISION_DIV1;
     if (HAL_TIM_Base_Init(&Tim7Handle) != HAL_OK) {
@@ -298,7 +299,8 @@ void
 startTimeout(uint16_t mSec) {
     __HAL_TIM_CLEAR_IT(&Tim7Handle, TIM_IT_UPDATE);
     bTimeElapsed = false;
-    Tim7Handle.Instance->ARR = (uint16_t)mSec+Tim7Handle.Instance->CNT-1;
+    Tim7Handle.Instance->CNT = 0; // We have to reset timeout
+    Tim7Handle.Instance->ARR = (uint16_t)mSec-1;
     if(HAL_TIM_Base_Start_IT(&Tim7Handle) != HAL_OK) {
         Error_Handler();
       }
@@ -307,10 +309,20 @@ startTimeout(uint16_t mSec) {
 
 void
 resetTimeout() {
+    __HAL_TIM_CLEAR_IT(&Tim7Handle, TIM_IT_UPDATE);
     bTimeElapsed = false;
+    HAL_TIM_Base_Stop_IT(&Tim7Handle);
     Tim7Handle.Instance->CNT = 0; // We have to reset timeout
+    HAL_TIM_Base_Start_IT(&Tim7Handle);
 }
 
+
+void
+stopTimeout() {
+    __HAL_TIM_CLEAR_IT(&Tim7Handle, TIM_IT_UPDATE);
+    bTimeElapsed = false;
+    HAL_TIM_Base_Stop_IT(&Tim7Handle);
+}
 
 void
 pulseRelay(uint32_t relayChannel, uint16_t msPulse) {
@@ -383,6 +395,7 @@ prepareFileSystem() {
     }
     if(bTimeElapsed) // USB Disk not responding...
         Error_Handler();
+    stopTimeout();
 
     // Initializes (mount) the File System
     if(f_mount(&USBDISKFatFs, (TCHAR const*)USBDISKPath, 0 ) != FR_OK ) return false;
@@ -436,7 +449,7 @@ connectBase() {
                 }
             }
         } while(!bBaseConnected && !bTimeElapsed);
-
+        stopTimeout();
         ledsOff();
         if(!bBaseConnected) {
             txBuffer[0] = connectionTimedOut;
@@ -510,6 +523,7 @@ connectRemote() {
                     }
                     USBH_Process(&hUSB_Host); // USBH_Background Process
                 } while(!bRemoteConnected && !bTimeElapsed);
+                stopTimeout();
             }
             USBH_Process(&hUSB_Host); // USBH_Background Process
         } // if(rxBuffer[0] == connectRequest)
@@ -578,6 +592,7 @@ processBase() {
             resetTimeout();
         } // if(bRadioDataAvailable)
     } // while(!bSuspend && !bTimeElapsed)
+    stopTimeout();
     // Connection terminated...
     HAL_TIM_Base_Stop(&Tim2Handle);
     BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio and power down the Codec
@@ -628,22 +643,28 @@ processRemote() {
             // We have done with the new data...
         } // if(bRadioDataAvailable)
         if(bSendOpenGate || bSendOpenCarGate) {
+            ledsOff();
+            BSP_LED_On(LED_BLUE);
             bSendOpenGate = false;
             bSendOpenCarGate = false;
+//            BSP_AUDIO_IN_Stop();               // Stop sending Audio Data
+//            BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio
             rf24.openWritingPipe(pipes[2]);
             rf24.setRetries(5, 15);
-            BSP_LED_On(LED_BLUE);
             rf24.flush_rx();
             txBuffer[0] = bSendOpenGate ? openGateCmd : openCarGateCmd;
             rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
             rf24.startWrite();
             BSP_LED_Off(LED_BLUE);
+//            BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE);
+//            BSP_AUDIO_OUT_Play(Audio_Out_Buffer, 2*sizeof(*Audio_Out_Buffer)*MAX_PAYLOAD_SIZE);
             HAL_Delay(50);
             rf24.openWritingPipe(pipes[0]);
             rf24.setRetries(1, 0);
         }
         USBH_Process(&hUSB_Host); // USBH_Background Process
     } // while(!bSuspend && ! bTimeElapsed)
+    stopTimeout();
 
     ledsOff();
     BSP_AUDIO_IN_Stop();               // Stop sending Audio Data
@@ -653,7 +674,7 @@ processRemote() {
     rf24.flush_rx();
 
     startTimeout(MAX_WAIT_ACK_TIME);
-    uint32_t t0 = HAL_GetTick()-2000; // Just to start the first request.
+    uint32_t t0 = HAL_GetTick()-QUERY_INTERVAL-1; // Just to start the first request.
     bool bBaseDisConnected = false;
     do {
         if(HAL_GetTick()-t0 > QUERY_INTERVAL) {
@@ -676,6 +697,7 @@ processRemote() {
         }
         USBH_Process(&hUSB_Host); // USBH_Background Process
     } while(!bBaseDisConnected && !bTimeElapsed);
+    stopTimeout();
     // Connection terminated...
     ledsOff();
 }
@@ -1123,8 +1145,8 @@ void
 HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
     if(GPIO_Pin == PHONE_BUTTON_GPIO_PIN) {
         if(isBaseStation) {
-            startConnectTime = HAL_GetTick();
             bBaseSleeping = false;
+            resetTimeout();
         }
         else {
             if(bConnectionRequested) {
