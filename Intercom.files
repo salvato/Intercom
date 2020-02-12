@@ -79,6 +79,7 @@ Inc/audio.h
 Inc/cmsis_compiler.h
 Inc/cmsis_gcc.h
 Inc/cmsis_version.h
+Inc/config.h
 Inc/core_cm4.h
 Inc/cs43l22.h
 Inc/ffconf.h
