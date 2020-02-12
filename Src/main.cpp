@@ -571,9 +571,14 @@ processBase() {
                     rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
                     HAL_Delay(300);
                 }
-                else {
-                    processCommand(rxBuffer[0]);
+                else if(rxBuffer[0] == openGateCmd) {
+                        pulseRelay(GATE_RELAY_TIM_CHANNEL, 1500);
                 }
+                else if(rxBuffer[0] == openCarGateCmd) {
+                        pulseRelay(CAR_GATE_RELAY_TIM_CHANNEL, 1500);
+                }
+                else
+                    Error_Handler();
             }
             else { // The packet contains Audio Data: first send our audio data...
                 rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
