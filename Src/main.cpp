@@ -1,4 +1,4 @@
-﻿#include "main.h"
+#include "main.h"
 #include "RF24.h"
 #include "printf.h"
 #include "string.h"
@@ -71,11 +71,12 @@ static bool prepareFileSystem();
 static void startAlarm();
 static bool updateAlarm();
 static void stopAlarm();
-static void processCommand(Commands command);
+static void processCommand(uint8_t command);
 static void relayTIM3Init();
 static void pulseRelay(uint32_t relayChannel, uint16_t msPulse);
 static void timeoutTIM7Init();
 static void startTimeout(uint16_t mSec);
+static void resetTimeout();
 
 
 TIM_HandleTypeDef  Tim2Handle;
@@ -225,19 +226,18 @@ main(void) {
 void
 relayTIM3Init() {
   TIM_ClockConfigTypeDef  sClockSourceConfig;
-  TIM_MasterConfigTypeDef sMasterConfig;
   TIM_OC_InitTypeDef      sConfigOC;
 
   __HAL_RCC_TIM3_CLK_ENABLE();
 
   // Compute the prescaler value, to have TIM3Freq = 1KHz
-  uint32_t uwPrescalerValue = (uint32_t)((SystemCoreClock/2) / 1000) - 1;
+  uint32_t uwPrescalerValue = (uint32_t)((SystemCoreClock) / 1000) - 1;
 
   Tim3Handle.Instance = TIM3;
   Tim3Handle.Init.Prescaler         = uwPrescalerValue;
   Tim3Handle.Init.CounterMode       = TIM_COUNTERMODE_UP;
   Tim3Handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  Tim3Handle.Init.Period            = 0xffff;
+  Tim3Handle.Init.Period            = 300;
   Tim3Handle.Init.ClockDivision     = TIM_CLOCKDIVISION_DIV1;
   if (HAL_TIM_Base_Init(&Tim3Handle) != HAL_OK) {
     Error_Handler();
@@ -252,15 +252,8 @@ relayTIM3Init() {
     Error_Handler();
   }
 
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&Tim3Handle, &sMasterConfig) != HAL_OK) {
-    Error_Handler();
-  }
-
-  sConfigOC.Pulse      = 999; // will be overwritten
+  sConfigOC.Pulse      = 10; // will be overwritten
   sConfigOC.OCMode     = TIM_OCMODE_TIMING;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_OC_ConfigChannel(&Tim3Handle, &sConfigOC, TIM_CHANNEL_ALL) != HAL_OK) {
     Error_Handler();
@@ -276,14 +269,15 @@ timeoutTIM7Init() {
     TIM_ClockConfigTypeDef  sClockSourceConfig;
 
     __HAL_RCC_TIM7_CLK_ENABLE();
-
+    // TIM7 on APB2 Bus.
     // Compute the prescaler value, to have TIM7Freq = 1KHz
-    uint32_t uwPrescalerValue = (uint32_t)((SystemCoreClock/2) / 1000) - 1;
+    uint32_t uwPrescalerValue = (uint32_t)((SystemCoreClock/4) / 1000) - 1;
 
     Tim7Handle.Instance = TIM7;
+
     Tim7Handle.Init.Prescaler         = uwPrescalerValue;
     Tim7Handle.Init.CounterMode       = TIM_COUNTERMODE_UP;
-    Tim7Handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+    Tim7Handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
     Tim7Handle.Init.Period            = 0xffff;
     Tim7Handle.Init.ClockDivision     = TIM_CLOCKDIVISION_DIV1;
     if (HAL_TIM_Base_Init(&Tim7Handle) != HAL_OK) {
@@ -302,11 +296,19 @@ timeoutTIM7Init() {
 
 void
 startTimeout(uint16_t mSec) {
+    __HAL_TIM_CLEAR_IT(&Tim7Handle, TIM_IT_UPDATE);
     bTimeElapsed = false;
-    Tim7Handle.Instance->ARR = (uint32_t)mSec;
+    Tim7Handle.Instance->ARR = (uint16_t)mSec+Tim7Handle.Instance->CNT-1;
     if(HAL_TIM_Base_Start_IT(&Tim7Handle) != HAL_OK) {
         Error_Handler();
       }
+}
+
+
+void
+resetTimeout() {
+    bTimeElapsed = false;
+    Tim7Handle.Instance->CNT = 0; // We have to reset timeout
 }
 
 
@@ -330,9 +332,9 @@ pulseRelay(uint32_t relayChannel, uint16_t msPulse) {
         port = CAR_GATE_RELAY_GPIO_PORT;
         pin  = CAR_GATE_RELAY_GPIO_PIN;
     }
-    HAL_GPIO_WritePin(port, pin, GPIO_PIN_SET); // will reset on interrupt service routine
+    HAL_GPIO_WritePin(port, pin, GPIO_PIN_RESET); // will reset on interrupt service routine
 
-    Tim3Handle.Instance->CCR3 = Tim3Handle.Instance->CNT + msPulse;
+    Tim3Handle.Instance->ARR = msPulse;
     __HAL_TIM_CLEAR_IT(&Tim3Handle, relayChannel);
     if(HAL_TIM_OC_Start_IT(&Tim3Handle, relayChannel) != HAL_OK) {
       Error_Handler();
@@ -556,7 +558,7 @@ processBase() {
                     HAL_Delay(300);
                 }
                 else {
-                    processCommand((Commands)rxBuffer[0]);
+                    processCommand(rxBuffer[0]);
                 }
             }
             else { // The packet contains Audio Data: first send our audio data...
@@ -573,7 +575,7 @@ processBase() {
                     Audio_Out_Buffer[offset+1] = rxBuffer[indx] << 8; // 2nd Stereo Channel
                 }
             }// We have done with the new data.
-            Tim7Handle.Instance->CNT = 0;
+            resetTimeout();
         } // if(bRadioDataAvailable)
     } // while(!bSuspend && !bTimeElapsed)
     // Connection terminated...
@@ -622,25 +624,23 @@ processRemote() {
                 Audio_Out_Buffer[offset]   = rxBuffer[indx] << 8; // 1st Stereo Channel
                 Audio_Out_Buffer[offset+1] = rxBuffer[indx] << 8; // 2nd Stereo Channel
             }
-            Tim7Handle.Instance->CNT = 0;
+            resetTimeout();
             // We have done with the new data...
         } // if(bRadioDataAvailable)
         if(bSendOpenGate || bSendOpenCarGate) {
             bSendOpenGate = false;
             bSendOpenCarGate = false;
-            rf24.flush_tx();
             rf24.openWritingPipe(pipes[2]);
             rf24.setRetries(5, 15);
-            rf24.flush_rx();
             BSP_LED_On(LED_BLUE);
+            rf24.flush_rx();
             txBuffer[0] = bSendOpenGate ? openGateCmd : openCarGateCmd;
             rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
             rf24.startWrite();
             BSP_LED_Off(LED_BLUE);
-            HAL_Delay(500);
+            HAL_Delay(50);
             rf24.openWritingPipe(pipes[0]);
             rf24.setRetries(1, 0);
-            rf24.flush_rx();
         }
         USBH_Process(&hUSB_Host); // USBH_Background Process
     } // while(!bSuspend && ! bTimeElapsed)
@@ -682,15 +682,16 @@ processRemote() {
 
 
 void
-processCommand(Commands command) {
+processCommand(uint8_t command) {
     switch(command) {
         case openGateCmd:
-            pulseRelay(GATE_RELAY_TIM_CHANNEL, 500);
+            pulseRelay(GATE_RELAY_TIM_CHANNEL, 1500);
             break;
         case openCarGateCmd:
-            pulseRelay(CAR_GATE_RELAY_TIM_CHANNEL, 500);
+            pulseRelay(CAR_GATE_RELAY_TIM_CHANNEL, 1500);
             break;
         default:
+            pulseRelay(GATE_RELAY_TIM_CHANNEL, 1500);
             break;
     }
 }
@@ -1168,12 +1169,12 @@ HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim) {
         pin  = FREE1_RELAY_GPIO_PIN;
         channel = FREE1_RELAY_TIM_CHANNEL;
     }
-//    if(__HAL_TIM_GET_IT_SOURCE(htim, TIM_FLAG_CC2) != RESET) {
+//    if(__HAL_TIM_GET_IT_SOURCE(htim, TIM_FLAG_CC3) != RESET) {
 //        port = FREE2_RELAY_GPIO_PORT;
 //        pin  = FREE2_RELAY_GPIO_PIN;
 //        channel = FREE2_RELAY_TIM_CHANNEL;
 //    }
-    if(__HAL_TIM_GET_IT_SOURCE(htim, TIM_FLAG_CC3) != RESET) {
+    if(__HAL_TIM_GET_IT_SOURCE(htim, TIM_FLAG_CC2) != RESET) {
         port = GATE_RELAY_GPIO_PORT;
         pin  = GATE_RELAY_GPIO_PIN;
         channel = GATE_RELAY_TIM_CHANNEL;
@@ -1183,7 +1184,7 @@ HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim) {
         pin  = CAR_GATE_RELAY_GPIO_PIN;
         channel = CAR_GATE_RELAY_TIM_CHANNEL;
     }
-    HAL_GPIO_WritePin(port, pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(port, pin, GPIO_PIN_SET);
     HAL_TIM_OC_Stop_IT(htim, channel);
 }
 
