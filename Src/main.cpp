@@ -565,17 +565,18 @@ processBase() {
             if(pipe_num == 2) {// The packet is a command
                 BSP_LED_On(LED_BLUE); // Signal the packet's start reading
                 rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
+                uint8_t command = rxBuffer[0];
                 BSP_LED_Off(LED_BLUE); // Reading done
-                if(rxBuffer[0] == suspendCmd) {
+                if(command == suspendCmd) {
                     txBuffer[0] = suspendAck;
                     bSuspend = true;
                     rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
                     HAL_Delay(300);
                 }
-                else if(rxBuffer[0] == openGateCmd) {
+                else if(command == openGateCmd) {
                         pulseRelay(GATE_RELAY_TIM_CHANNEL, 1500);
                 }
-                else if(rxBuffer[0] == openCarGateCmd) {
+                else if(command == openCarGateCmd) {
                         pulseRelay(CAR_GATE_RELAY_TIM_CHANNEL, 1500);
                 }
                 else
