@@ -144,7 +144,7 @@ __IO bool bReady2Send;
 __IO bool bReady2Play;
 __IO bool bBaseSleeping;
 
-__IO bool bTimeElapsed;
+__IO bool bTimeoutElapsed;
 __IO bool bConnectionRequested;
 __IO bool bConnectionAccepted;
      bool bConnectionTimedOut;
@@ -298,7 +298,7 @@ timeoutTIM7Init() {
 void
 startTimeout(uint16_t mSec) {
     __HAL_TIM_CLEAR_IT(&Tim7Handle, TIM_IT_UPDATE);
-    bTimeElapsed = false;
+    bTimeoutElapsed = false;
     Tim7Handle.Instance->CNT = 0; // We have to reset timeout
     Tim7Handle.Instance->ARR = (uint16_t)mSec-1;
     if(HAL_TIM_Base_Start_IT(&Tim7Handle) != HAL_OK) {
@@ -310,7 +310,7 @@ startTimeout(uint16_t mSec) {
 void
 resetTimeout() {
     __HAL_TIM_CLEAR_IT(&Tim7Handle, TIM_IT_UPDATE);
-    bTimeElapsed = false;
+    bTimeoutElapsed = false;
     HAL_TIM_Base_Stop_IT(&Tim7Handle);
     Tim7Handle.Instance->CNT = 0; // We have to reset timeout
     HAL_TIM_Base_Start_IT(&Tim7Handle);
@@ -320,9 +320,10 @@ resetTimeout() {
 void
 stopTimeout() {
     __HAL_TIM_CLEAR_IT(&Tim7Handle, TIM_IT_UPDATE);
-    bTimeElapsed = false;
+    bTimeoutElapsed = false;
     HAL_TIM_Base_Stop_IT(&Tim7Handle);
 }
+
 
 void
 pulseRelay(uint32_t relayChannel, uint16_t msPulse) {
@@ -390,10 +391,10 @@ prepareFileSystem() {
 
     USBH_USR_ApplicationState = USBH_USR_FS_INIT;
     startTimeout(5000);
-    while(AppliState != APPLICATION_START && !bTimeElapsed) {
+    while(AppliState != APPLICATION_START && !bTimeoutElapsed) {
         USBH_Process(&hUSB_Host); // USBH_Background Process
     }
-    if(bTimeElapsed) // USB Disk not responding...
+    if(bTimeoutElapsed) // USB Disk not responding...
         Error_Handler();
     stopTimeout();
 
@@ -448,7 +449,7 @@ connectBase() {
                     HAL_Delay(50);
                 }
             }
-        } while(!bBaseConnected && !bTimeElapsed);
+        } while(!bBaseConnected && !bTimeoutElapsed);
         stopTimeout();
         ledsOff();
         if(!bBaseConnected) {
@@ -467,7 +468,7 @@ connectBase() {
 // The Remote stay receiving data until a "Connection Request" arrives from the Base.
 // It then start playing an Alarm Sound and wait for the user to pick up the phone.
 // If the user does not interact within a given time the Remote stops the sound
-// ad return waiting a new call.
+// ad returns waiting a new call.
 // If the user interact within the given time it send a "Connection Accepted" message
 // and assumes to be connected with the Base.
 void
@@ -522,7 +523,7 @@ connectRemote() {
                         }
                     }
                     USBH_Process(&hUSB_Host); // USBH_Background Process
-                } while(!bRemoteConnected && !bTimeElapsed);
+                } while(!bRemoteConnected && !bTimeoutElapsed);
                 stopTimeout();
             }
             USBH_Process(&hUSB_Host); // USBH_Background Process
@@ -557,7 +558,7 @@ processBase() {
     BSP_LED_On(LED_GREEN);
     bSuspend = false;
     startTimeout(MAX_NO_SIGNAL_TIME);
-    while(!bSuspend && !bTimeElapsed) {
+    while(!bSuspend && !bTimeoutElapsed) {
         if(bRadioDataAvailable) {
             bRadioDataAvailable = false;
             rf24.available(&pipe_num);
@@ -596,7 +597,7 @@ processBase() {
             }// We have done with the new data.
             resetTimeout();
         } // if(bRadioDataAvailable)
-    } // while(!bSuspend && !bTimeElapsed)
+    } // while(!bSuspend && !bTimeoutElapsed)
     stopTimeout();
     // Connection terminated...
     HAL_TIM_Base_Stop(&Tim2Handle);
@@ -623,7 +624,7 @@ processRemote() {
     bRadioIrq = true; // To force the first sending when we are ready to send
     bSuspend = false;
     startTimeout(MAX_NO_SIGNAL_TIME);
-    while(!bSuspend && !bTimeElapsed) {
+    while(!bSuspend && !bTimeoutElapsed) {
         if(bReady2Send && bRadioIrq) { // We will send data only when available and
             bReady2Send = false;       // the previous data were sent or lost !
             bRadioIrq = false;
@@ -652,23 +653,21 @@ processRemote() {
             BSP_LED_On(LED_BLUE);
             bSendOpenGate = false;
             bSendOpenCarGate = false;
-//            BSP_AUDIO_IN_Stop();               // Stop sending Audio Data
-//            BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio
+            BSP_AUDIO_IN_Stop(); // Ensure no other process can modify txBuffer
             rf24.openWritingPipe(pipes[2]);
             rf24.setRetries(5, 15);
-            rf24.flush_rx();
+            rf24.flush_tx();
             txBuffer[0] = bSendOpenGate ? openGateCmd : openCarGateCmd;
             rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
             rf24.startWrite();
-            BSP_LED_Off(LED_BLUE);
-//            BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE);
-//            BSP_AUDIO_OUT_Play(Audio_Out_Buffer, 2*sizeof(*Audio_Out_Buffer)*MAX_PAYLOAD_SIZE);
             HAL_Delay(50);
+            BSP_LED_Off(LED_BLUE);
             rf24.openWritingPipe(pipes[0]);
             rf24.setRetries(1, 0);
+            BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE); // Resart sending audio
         }
         USBH_Process(&hUSB_Host); // USBH_Background Process
-    } // while(!bSuspend && ! bTimeElapsed)
+    } // while(!bSuspend && ! bTimeoutElapsed)
     stopTimeout();
 
     ledsOff();
@@ -701,7 +700,7 @@ processRemote() {
             }
         }
         USBH_Process(&hUSB_Host); // USBH_Background Process
-    } while(!bBaseDisConnected && !bTimeElapsed);
+    } while(!bBaseDisConnected && !bTimeoutElapsed);
     stopTimeout();
     // Connection terminated...
     ledsOff();
@@ -1224,7 +1223,7 @@ TIM3_IRQHandler(void) {
 
 void
 HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-    bTimeElapsed = true;
+    bTimeoutElapsed = true;
     HAL_TIM_Base_Stop(htim);
 }
 
