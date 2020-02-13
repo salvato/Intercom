@@ -1100,7 +1100,7 @@ void
 BSP_AUDIO_IN_TransferComplete_CallBack(void) {
     BSP_AUDIO_IN_PDMToPCM(&pdmDataIn[INTERNAL_BUFF_SIZE/2], pcmDataOut);
     for(uint16_t i=0; i<PCM_OUT_SIZE; i++) {
-        txBuffer[i+PCM_OUT_SIZE] = (pcmDataOut[i<<1] >> 8) & 0xFF;
+        txBuffer[i+PCM_OUT_SIZE] = 0;//(pcmDataOut[i<<1] >> 8) & 0xFF;
     }
     rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
     bReady2Send = true;
@@ -1111,7 +1111,7 @@ void
 BSP_AUDIO_IN_HalfTransfer_CallBack(void) {
     BSP_AUDIO_IN_PDMToPCM((uint16_t*)&pdmDataIn[0], (uint16_t*)&pcmDataOut[0]);
     for(uint16_t i=0; i<PCM_OUT_SIZE; i++) {
-        txBuffer[i] = (pcmDataOut[i<<1] >> 8) & 0xFF;
+        txBuffer[i] = 0;//(pcmDataOut[i<<1] >> 8) & 0xFF;
     }
 }
 
