@@ -30,7 +30,7 @@
 //===============================================================
 #define MAX_CONNECTION_TIME  60000
 #define MAX_WAIT_ACK_TIME    5000
-#define MAX_NO_SIGNAL_TIME   1000
+#define MAX_NO_SIGNAL_TIME   10000
 #define QUERY_INTERVAL       300
 
 // State Machine for the USBH_USR_ApplicationState
@@ -73,18 +73,13 @@ static bool prepareFileSystem();
 static void startAlarm();
 static bool updateAlarm();
 static void stopAlarm();
-static void processCommand(uint8_t command, uint8_t sourcePipe);
+static void processReceivedCommand(uint8_t command, uint8_t sourcePipe);
 static void relayTIM3Init();
 static void pulseRelay(uint32_t relayChannel, uint16_t msPulse);
-static void timeoutTIM7Init();
-static void startTimeout(uint16_t mSec);
-static void resetTimeout();
-static void stopTimeout();
 
 
 TIM_HandleTypeDef  Tim2Handle;
 TIM_HandleTypeDef  Tim3Handle;
-TIM_HandleTypeDef  Tim7Handle;
 ADC_HandleTypeDef  hAdc;
 USBH_HandleTypeDef hUSB_Host; // USB Host handle
 extern HCD_HandleTypeDef hhcd; // defined in usbh_conf.c
@@ -178,7 +173,6 @@ main(void) {
     HAL_Init();
     initLeds();
     SystemClock_Config();
-    timeoutTIM7Init();
 
     // Are we Base or Remote ?
     configPinInit();
@@ -268,66 +262,6 @@ relayTIM3Init() {
 
 
 void
-timeoutTIM7Init() {
-    TIM_ClockConfigTypeDef  sClockSourceConfig;
-
-    __HAL_RCC_TIM7_CLK_ENABLE();
-    // TIM7 on APB2 Bus.
-    // Compute the prescaler value, to have TIM7Freq = 1KHz
-    uint32_t uwPrescalerValue = (uint32_t)((SystemCoreClock/4) / 1000) - 1;
-
-    Tim7Handle.Instance = TIM7;
-
-    Tim7Handle.Init.Prescaler         = uwPrescalerValue;
-    Tim7Handle.Init.CounterMode       = TIM_COUNTERMODE_UP;
-    Tim7Handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-    Tim7Handle.Init.Period            = 0xffff;
-    Tim7Handle.Init.ClockDivision     = TIM_CLOCKDIVISION_DIV1;
-    if (HAL_TIM_Base_Init(&Tim7Handle) != HAL_OK) {
-      Error_Handler();
-    }
-
-    sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-    if (HAL_TIM_ConfigClockSource(&Tim7Handle, &sClockSourceConfig) != HAL_OK) {
-      Error_Handler();
-    }
-
-    HAL_NVIC_SetPriority(TIM7_IRQn, 0, 0);
-    HAL_NVIC_EnableIRQ(TIM7_IRQn);
-}
-
-
-void
-startTimeout(uint16_t mSec) {
-    __HAL_TIM_CLEAR_IT(&Tim7Handle, TIM_IT_UPDATE);
-    bTimeoutElapsed = false;
-    Tim7Handle.Instance->CNT = 0; // We have to reset timeout
-    Tim7Handle.Instance->ARR = (uint16_t)mSec-1;
-    if(HAL_TIM_Base_Start_IT(&Tim7Handle) != HAL_OK) {
-        Error_Handler();
-      }
-}
-
-
-void
-resetTimeout() {
-    __HAL_TIM_CLEAR_IT(&Tim7Handle, TIM_IT_UPDATE);
-    bTimeoutElapsed = false;
-    HAL_TIM_Base_Stop_IT(&Tim7Handle);
-    Tim7Handle.Instance->CNT = 0; // We have to reset timeout
-    HAL_TIM_Base_Start_IT(&Tim7Handle);
-}
-
-
-void
-stopTimeout() {
-    __HAL_TIM_CLEAR_IT(&Tim7Handle, TIM_IT_UPDATE);
-    bTimeoutElapsed = false;
-    HAL_TIM_Base_Stop_IT(&Tim7Handle);
-}
-
-
-void
 pulseRelay(uint32_t relayChannel, uint16_t msPulse) {
     GPIO_TypeDef* port;
     uint32_t pin;
@@ -392,13 +326,12 @@ prepareFileSystem() {
     if(USBH_Start(&hUSB_Host) != USBH_OK) return false;
 
     USBH_USR_ApplicationState = USBH_USR_FS_INIT;
-    startTimeout(5000);
+    uint32_t startTime = HAL_GetTick();
     while(AppliState != APPLICATION_START && !bTimeoutElapsed) {
         USBH_Process(&hUSB_Host); // USBH_Background Process
     }
-    if(bTimeoutElapsed) // USB Disk not responding...
+    if(HAL_GetTick()-startTime > 5000) // USB Disk not responding...
         Error_Handler();
-    stopTimeout();
 
     // Initializes (mount) the File System
     if(f_mount(&USBDISKFatFs, (TCHAR const*)USBDISKPath, 0 ) != FR_OK ) return false;
@@ -431,7 +364,7 @@ connectBase() {
 
         // An external event has been detected: try to connect to a Remote !
         uint32_t t0 = HAL_GetTick()-QUERY_INTERVAL-1; // Just to send immediately the first request.
-        startTimeout(MAX_CONNECTION_TIME);
+        uint32_t startTime = HAL_GetTick();
         do {
             if(HAL_GetTick()-t0 > QUERY_INTERVAL) {
                 t0 = HAL_GetTick();
@@ -451,8 +384,8 @@ connectBase() {
                     HAL_Delay(50);
                 }
             }
+            bTimeoutElapsed = (HAL_GetTick()-startTime) > MAX_CONNECTION_TIME;
         } while(!bBaseConnected && !bTimeoutElapsed);
-        stopTimeout();
         ledsOff();
         if(!bBaseConnected) {
             txBuffer[0] = connectionTimedOut;
@@ -510,7 +443,7 @@ connectRemote() {
             stopAlarm();
 
             if(!bConnectionTimedOut && bConnectionAccepted) {
-                startTimeout(MAX_WAIT_ACK_TIME);
+                uint32_t startTime = HAL_GetTick();
                 do {
                     if(bRadioDataAvailable) {
                         bRadioDataAvailable = false;
@@ -525,8 +458,8 @@ connectRemote() {
                         }
                     }
                     USBH_Process(&hUSB_Host); // USBH_Background Process
+                    bTimeoutElapsed = (HAL_GetTick()-startTime) > MAX_WAIT_ACK_TIME;
                 } while(!bRemoteConnected && !bTimeoutElapsed);
-                stopTimeout();
             }
             USBH_Process(&hUSB_Host); // USBH_Background Process
         } // if(rxBuffer[0] == connectRequest)
@@ -541,11 +474,10 @@ connectRemote() {
 void
 processBase() {
     uint8_t pipeNum;
-    BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
     setRole(PRX); // Change role from PTX to PRX...
     rf24.flush_rx();
     rf24.setRetries(1, 0); // We have to be fast !!!
-    bRadioDataAvailable = false;
+    rf24.maskIRQ(false, false, false);
     adcInit();
     adcTIM2Init();
     // Enables ADC DMA requests and enables ADC peripheral
@@ -553,30 +485,30 @@ processBase() {
         Error_Handler();
     }
     chunk = 0;
-    rf24.maskIRQ(false, false, false);
+    BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
     BSP_AUDIO_OUT_Play(Audio_Out_Buffer, 2*MAX_PAYLOAD_SIZE);
     // Enable ADC periodic sampling
     if(HAL_TIM_Base_Start(&Tim2Handle) != HAL_OK) Error_Handler();
     BSP_LED_On(LED_GREEN);
+
     bSuspend = false;
-    startTimeout(MAX_NO_SIGNAL_TIME);
-    while(!bSuspend && !bTimeoutElapsed) {
+    bRadioDataAvailable = false;
+    uint32_t startTimeout = HAL_GetTick();
+    do {
         if(bRadioDataAvailable) {
             bRadioDataAvailable = false;
+            startTimeout = HAL_GetTick();
             rf24.available(&pipeNum);
             BSP_LED_On(LED_BLUE); // Signal the packet's start reading
             rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
             BSP_LED_Off(LED_BLUE); // Reading done
             if(pipeNum == 2) {// The packet is a command
-                processCommand(rxBuffer[0], pipeNum);
+                processReceivedCommand(rxBuffer[0], pipeNum);
             }
             else { // The packet contains Audio Data:
                 // At first replay with our audio data...
                 rf24.writeAckPayload(pipeNum, txBuffer, MAX_PAYLOAD_SIZE);
                 // then read the data...
-                BSP_LED_On(LED_BLUE); // Signal the packet's start reading
-                rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
-                BSP_LED_Off(LED_BLUE); // Reading done
                 // Place the data in the current Audio output chunk...
                 offset = chunk*MAX_PAYLOAD_SIZE;
                 for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
@@ -584,11 +516,11 @@ processBase() {
                     Audio_Out_Buffer[offset]   = rxBuffer[indx] << 8; // 1st Stereo Channel
                     Audio_Out_Buffer[offset+1] = rxBuffer[indx] << 8; // 2nd Stereo Channel
                 }
-            }// We have done with the new data.
-            resetTimeout();
+            } // We have done with the new data.
         } // if(bRadioDataAvailable)
-    } // while(!bSuspend && !bTimeoutElapsed)
-    stopTimeout();
+        bTimeoutElapsed = (HAL_GetTick()-startTimeout) > MAX_NO_SIGNAL_TIME;
+    } while(!bSuspend && !bTimeoutElapsed);
+
     // Connection terminated...
     HAL_TIM_Base_Stop(&Tim2Handle);     // Stop ADC sampling...
     BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio and power down the Codec
@@ -598,53 +530,51 @@ processBase() {
 
 void
 processRemote() {
-    BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
     setRole(PTX); // Change role from PRX to PTX...
     rf24.flush_tx();
-    bReady2Send  = false;
     rf24.setRetries(1, 0); // We have to be fast !!!
+    rf24.maskIRQ(false, false, false);
     BSP_AUDIO_IN_Init(DEFAULT_AUDIO_IN_FREQ, DEFAULT_AUDIO_IN_BIT_RESOLUTION, DEFAULT_AUDIO_IN_CHANNEL_NBR);
     BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE);
     chunk = 0;
+    BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
     BSP_AUDIO_OUT_Play(Audio_Out_Buffer, 2*sizeof(*Audio_Out_Buffer)*MAX_PAYLOAD_SIZE);
-    rf24.maskIRQ(false, false, false);
 
     // Set the initial status...
+    bReady2Send      = false;
     bSendOpenGate    = false;
     bSendOpenCarGate = false;
-    bRadioIrq        = true; // Just to force sending when we are ready to send
+    bRadioIrq        = true; // To force sending as soon as we have data
     bSuspend         = false;
-    startTimeout(MAX_NO_SIGNAL_TIME);
-    while(!bSuspend && !bTimeoutElapsed) {
+    uint32_t startTimeout = HAL_GetTick();
+    do {
         if(bReady2Send && bRadioIrq) { // We will send data only when available and
             bReady2Send = false;       // the previous data were sent or lost !
             bRadioIrq = false;
             BSP_LED_Off(LED_ORANGE);
             BSP_LED_Off(LED_BLUE);
-            BSP_LED_On(LED_GREEN);// Signal the start sending...
-            rf24.startWrite();
+            BSP_LED_On(LED_GREEN); // Signal the start of sending the
+            rf24.startWrite();     // buffer prepared by the Microphone
         }
         if(bRadioDataAvailable) {
             bRadioDataAvailable = false;
             BSP_LED_On(LED_BLUE); // Signal the packet's start reading
             rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
             BSP_LED_Off(LED_BLUE); // Reading done
-            // Write data in the current chunk
+            // Write data in the current Audio Buffer chunk
             offset = chunk*MAX_PAYLOAD_SIZE;
             for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
                 offset = (chunk*MAX_PAYLOAD_SIZE+indx) << 1;
                 Audio_Out_Buffer[offset]   = rxBuffer[indx] << 8; // 1st Stereo Channel
                 Audio_Out_Buffer[offset+1] = rxBuffer[indx] << 8; // 2nd Stereo Channel
             }
-            resetTimeout();
+            startTimeout = HAL_GetTick();
             // We have done with the new data...
         } // if(bRadioDataAvailable)
         if(bSendOpenGate || bSendOpenCarGate || bSuspend) {
-            BSP_AUDIO_IN_Stop(); // Ensure no other process can modify txBuffer
-            if(bSuspend) {
-                BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio and switch off the codec
-            }
+            .... da continuare ....
             ledsOff();
+            BSP_AUDIO_IN_Stop(); // Ensure no other process can modify txBuffer
             rf24.flush_tx();     // Empty transmission queue
             rf24.openWritingPipe(pipes[2]);
             rf24.setRetries(5, 15);
@@ -705,8 +635,10 @@ processRemote() {
             if(!bSuspend)
                 BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE); // Resart sending audio
         }
-    } // while(!bSuspend && ! bTimeoutElapsed)
-    stopTimeout();
+        bTimeoutElapsed = (HAL_GetTick()-startTimeout) > MAX_NO_SIGNAL_TIME;
+    } while(!bSuspend && !bTimeoutElapsed);
+    BSP_AUDIO_IN_Stop();
+    BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio and switch off the codec
 
     // Connection terminated...
     ledsOff();
@@ -714,7 +646,55 @@ processRemote() {
 
 
 void
-processCommand(uint8_t command, uint8_t sourcePipe) {
+sendCommand(uint8_t command) {
+    BSP_AUDIO_IN_Stop(); // Ensure no other process can modify txBuffer
+    rf24.flush_tx();     // Empty transmission queue
+    rf24.openWritingPipe(pipes[2]);
+    rf24.setRetries(5, 15);
+    uint32_t elapsedTime = HAL_GetTick();
+    uint32_t t0 = HAL_GetTick()-QUERY_INTERVAL-1; // Just to force the first send.
+    bool bTimeout = false;
+    bool bBaseDisConnected = false;
+    bool bGateOpened = false;
+    bool bCarGateOpened = false;
+    bool bCanProceed = false;
+    ledsOff();
+    txBuffer[0] = command;
+    do {
+        if(HAL_GetTick()-t0 > QUERY_INTERVAL) {
+            t0 = HAL_GetTick();
+            BSP_LED_On(LED_BLUE);
+            rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+            rf24.startWrite();
+            BSP_LED_Off(LED_BLUE);
+        }
+        if(bRadioDataAvailable) {
+            bRadioDataAvailable = false;
+            BSP_LED_On(LED_ORANGE); // Signal the packet's start reading
+            rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
+            BSP_LED_Off(LED_ORANGE); // Reading done
+            if(rxBuffer[0] == suspendAck) {
+                bBaseDisConnected = true;
+            }
+            if(rxBuffer[0] == openGateAck) {
+                bGateOpened = true;
+            }
+            if(rxBuffer[0] == suspendAck) {
+                bCarGateOpened = true;
+            }
+            HAL_Delay(50);
+        }
+        bTimeout = (HAL_GetTick() - elapsedTime) > MAX_WAIT_ACK_TIME;
+        bCanProceed = bBaseDisConnected || bGateOpened || bCarGateOpened ;
+    } while(!bCanProceed && !bTimeout);
+    if(command==suspendCmd) {
+        bSuspend = true;
+    }
+}
+
+
+void
+processReceivedCommand(uint8_t command, uint8_t sourcePipe) {
     if(command == suspendCmd) {
         txBuffer[0] = suspendAck;
         bSuspend = true;
@@ -1161,7 +1141,6 @@ HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
     if(GPIO_Pin == PHONE_BUTTON_GPIO_PIN) {
         if(isBaseStation) {
             bBaseSleeping = false;
-            resetTimeout();
         }
         else {
             if(bConnectionRequested) {
@@ -1236,12 +1215,6 @@ void
 HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     bTimeoutElapsed = true;
     HAL_TIM_Base_Stop(htim);
-}
-
-
-void
-TIM7_IRQHandler(void) {
-    HAL_TIM_IRQHandler(&Tim7Handle);
 }
 
 
