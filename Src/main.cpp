@@ -68,14 +68,15 @@ static void connectBase();
 static void connectRemote();
 static void processBase();
 static void processRemote();
+static void processReceivedCommand(uint8_t command, uint8_t sourcePipe);
+static void sendCommand(uint8_t command);
 static void USBH_UserProcess (USBH_HandleTypeDef *pHost, uint8_t vId);
 static bool prepareFileSystem();
 static void startAlarm();
 static bool updateAlarm();
 static void stopAlarm();
-static void processReceivedCommand(uint8_t command, uint8_t sourcePipe);
 static void relayTIM3Init();
-static void pulseRelay(uint32_t relayChannel, uint16_t msPulse);
+static void relayPulse(uint32_t relayChannel, uint16_t msPulse);
 
 
 TIM_HandleTypeDef  Tim2Handle;
@@ -152,6 +153,7 @@ __IO BUFFER_StateTypeDef buffer_offset;
 
 __IO bool bSendOpenGate;
 __IO bool bSendOpenCarGate;
+__IO bool bBaseDisconnected;
 
 
 FATFS USBDISKFatFs;          // File system object for USB disk logical drive
@@ -166,7 +168,7 @@ static uint8_t  USBH_USR_ApplicationState = USBH_USR_FS_INIT;
 
 int
 main(void) {
-    const uint8_t Channel = 76;
+    const uint8_t Channel = 2;
     Volume = 70; // % of Max
 
     // System startup
@@ -262,17 +264,9 @@ relayTIM3Init() {
 
 
 void
-pulseRelay(uint32_t relayChannel, uint16_t msPulse) {
+relayPulse(uint32_t relayChannel, uint16_t msPulse) {
     GPIO_TypeDef* port;
     uint32_t pin;
-    if(relayChannel == FREE1_RELAY_TIM_CHANNEL) {
-        port = FREE1_RELAY_GPIO_PORT;
-        pin  = FREE1_RELAY_GPIO_PIN;
-    }
-//    if(relayChannel == FREE2_RELAY_TIM_CHANNEL) {
-//        port = FREE2_RELAY_GPIO_PORT;
-//        pin  = FREE2_RELAY_GPIO_PIN;
-//    }
     if(relayChannel == GATE_RELAY_TIM_CHANNEL) {
         port = GATE_RELAY_GPIO_PORT;
         pin  = GATE_RELAY_GPIO_PIN;
@@ -281,6 +275,15 @@ pulseRelay(uint32_t relayChannel, uint16_t msPulse) {
         port = CAR_GATE_RELAY_GPIO_PORT;
         pin  = CAR_GATE_RELAY_GPIO_PIN;
     }
+    if(relayChannel == FREE1_RELAY_TIM_CHANNEL) {
+        port = FREE1_RELAY_GPIO_PORT;
+        pin  = FREE1_RELAY_GPIO_PIN;
+    }
+//    if(relayChannel == FREE2_RELAY_TIM_CHANNEL) {
+//        port = FREE2_RELAY_GPIO_PORT;
+//        pin  = FREE2_RELAY_GPIO_PIN;
+//    }
+
     HAL_GPIO_WritePin(port, pin, GPIO_PIN_RESET); // will reset on interrupt service routine
 
     Tim3Handle.Instance->ARR = msPulse;
@@ -341,7 +344,7 @@ prepareFileSystem() {
 }
 
 
-// The Base, once being woken up by a button press,
+// The Base, once woken up by a button press,
 // send a "Connection Request" to the Remote and waits for
 // a "Connection Accepted" message within a given time.
 // If the "Connection Accepted" is received the Base assumes that
@@ -463,7 +466,6 @@ connectRemote() {
             }
             USBH_Process(&hUSB_Host); // USBH_Background Process
         } // if(rxBuffer[0] == connectRequest)
-
         USBH_Process(&hUSB_Host); // USBH_Background Process
     } // while(!bRemoteConnected)
     // Connection with the Base established...
@@ -502,29 +504,47 @@ processBase() {
             BSP_LED_On(LED_BLUE); // Signal the packet's start reading
             rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
             BSP_LED_Off(LED_BLUE); // Reading done
-            if(pipeNum == 2) {// The packet is a command
-                processReceivedCommand(rxBuffer[0], pipeNum);
-            }
-            else { // The packet contains Audio Data:
+            if(pipeNum == 1) { // The packet contains Audio Data:
                 // At first replay with our audio data...
                 rf24.writeAckPayload(pipeNum, txBuffer, MAX_PAYLOAD_SIZE);
-                // then read the data...
-                // Place the data in the current Audio output chunk...
-                offset = chunk*MAX_PAYLOAD_SIZE;
+                // Then place the data in the current Audio output chunk...
+                uint8_t base = chunk*MAX_PAYLOAD_SIZE;
                 for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
-                    offset = (chunk*MAX_PAYLOAD_SIZE+indx) << 1;
+                    offset = (base+indx) << 1;
                     Audio_Out_Buffer[offset]   = rxBuffer[indx] << 8; // 1st Stereo Channel
                     Audio_Out_Buffer[offset+1] = rxBuffer[indx] << 8; // 2nd Stereo Channel
                 }
+            }
+            else { // The packet is a command
+                processReceivedCommand(rxBuffer[0], pipeNum);
             } // We have done with the new data.
         } // if(bRadioDataAvailable)
         bTimeoutElapsed = (HAL_GetTick()-startTimeout) > MAX_NO_SIGNAL_TIME;
     } while(!bSuspend && !bTimeoutElapsed);
+    ledsOff();
+    HAL_Delay(1000);
 
     // Connection terminated...
     HAL_TIM_Base_Stop(&Tim2Handle);     // Stop ADC sampling...
     BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio and power down the Codec
-    ledsOff();
+}
+
+
+void
+processReceivedCommand(uint8_t command, uint8_t sourcePipe) {
+    if(command == suspendCmd) {
+        txBuffer[0] = suspendAck;
+        bSuspend = true;
+    }
+    else if(command == openGateCmd) {
+        txBuffer[0] = openGateAck;
+        relayPulse(GATE_RELAY_TIM_CHANNEL, 1500);
+    }
+    else if(command == openCarGateCmd) {
+        txBuffer[0] = openCarGateAck;
+        relayPulse(CAR_GATE_RELAY_TIM_CHANNEL, 1500);
+    }
+    rf24.writeAckPayload(sourcePipe, txBuffer, MAX_PAYLOAD_SIZE);
 }
 
 
@@ -535,17 +555,18 @@ processRemote() {
     rf24.setRetries(1, 0); // We have to be fast !!!
     rf24.maskIRQ(false, false, false);
     BSP_AUDIO_IN_Init(DEFAULT_AUDIO_IN_FREQ, DEFAULT_AUDIO_IN_BIT_RESOLUTION, DEFAULT_AUDIO_IN_CHANNEL_NBR);
-    BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE);
-    chunk = 0;
     BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
+    chunk = 0;
     BSP_AUDIO_OUT_Play(Audio_Out_Buffer, 2*sizeof(*Audio_Out_Buffer)*MAX_PAYLOAD_SIZE);
+    BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE);
 
     // Set the initial status...
-    bReady2Send      = false;
+    bSuspend         = false;
+    bBaseDisconnected = false;
     bSendOpenGate    = false;
     bSendOpenCarGate = false;
+    bReady2Send      = false;
     bRadioIrq        = true; // To force sending as soon as we have data
-    bSuspend         = false;
     uint32_t startTimeout = HAL_GetTick();
     do {
         if(bReady2Send && bRadioIrq) { // We will send data only when available and
@@ -556,7 +577,7 @@ processRemote() {
             BSP_LED_On(LED_GREEN); // Signal the start of sending the
             rf24.startWrite();     // buffer prepared by the Microphone
         }
-        if(bRadioDataAvailable) {
+        if(bRadioDataAvailable) { // It's an Acknowledge Packet containing Audio
             bRadioDataAvailable = false;
             BSP_LED_On(LED_BLUE); // Signal the packet's start reading
             rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
@@ -571,76 +592,25 @@ processRemote() {
             startTimeout = HAL_GetTick();
             // We have done with the new data...
         } // if(bRadioDataAvailable)
-        if(bSendOpenGate || bSendOpenCarGate || bSuspend) {
-            .... da continuare ....
-            ledsOff();
-            BSP_AUDIO_IN_Stop(); // Ensure no other process can modify txBuffer
-            rf24.flush_tx();     // Empty transmission queue
-            rf24.openWritingPipe(pipes[2]);
-            rf24.setRetries(5, 15);
-            uint32_t elapsedTime = HAL_GetTick();
-            uint32_t t0 = HAL_GetTick()-QUERY_INTERVAL-1; // Just to force the first send.
-            bool bTimeout = false;
-            bool bBaseDisConnected = false;
-            bool bGateOpened = false;
-            bool bCarGateOpened = false;
-            bool bCanProceed = false;
-            do {
-                if(HAL_GetTick()-t0 > QUERY_INTERVAL) {
-                    t0 = HAL_GetTick();
-                    BSP_LED_On(LED_BLUE);
-                    if(bSuspend) {
-                        txBuffer[0] = suspendCmd;
-                        rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-                        rf24.startWrite();
-                    }
-                    if(bSendOpenGate) {
-                        txBuffer[0] = openGateCmd;
-                        rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-                        rf24.startWrite();
-                        bSendOpenGate = false;
-                    }
-                    if(bSendOpenCarGate) {
-                        txBuffer[0] = openCarGateCmd;
-                        rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-                        rf24.startWrite();
-                    }
-                    BSP_LED_Off(LED_BLUE);
-                }
-                if(bRadioDataAvailable) {
-                    bRadioDataAvailable = false;
-                    BSP_LED_On(LED_ORANGE); // Signal the packet's start reading
-                    rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
-                    BSP_LED_Off(LED_ORANGE); // Reading done
-                    if(rxBuffer[0] == suspendAck) {
-                        bBaseDisConnected = true;
-                    }
-                    if(rxBuffer[0] == openGateAck) {
-                        bGateOpened = true;
-                    }
-                    if(rxBuffer[0] == suspendAck) {
-                        bCarGateOpened = true;
-                    }
-                    HAL_Delay(50);
-                }
-                bTimeout = (HAL_GetTick() - elapsedTime) > MAX_WAIT_ACK_TIME;
-                bCanProceed = bBaseDisConnected || bGateOpened || bCarGateOpened ;
-            } while(!bCanProceed && !bTimeout);
 
-            HAL_Delay(50);
-            BSP_LED_Off(LED_BLUE);
-            bSendOpenCarGate = false;
-            rf24.openWritingPipe(pipes[0]);
-            rf24.setRetries(1, 0);
-            if(!bSuspend)
-                BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE); // Resart sending audio
+        if(bSuspend) {
+            sendCommand(suspendCmd); // It also set bBaseDisconnected to true
         }
+        if(bSendOpenGate) {
+            sendCommand(openGateCmd);
+        }
+        if(bSendOpenCarGate) {
+            sendCommand(openCarGateCmd);
+        }
+        bSendOpenGate    = false;
+        bSendOpenCarGate = false;
+
         bTimeoutElapsed = (HAL_GetTick()-startTimeout) > MAX_NO_SIGNAL_TIME;
-    } while(!bSuspend && !bTimeoutElapsed);
-    BSP_AUDIO_IN_Stop();
-    BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio and switch off the codec
+    } while(!bBaseDisconnected && !bTimeoutElapsed);
 
     // Connection terminated...
+    BSP_AUDIO_IN_Stop();
+    BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio and switch off the codec
     ledsOff();
 }
 
@@ -648,16 +618,14 @@ processRemote() {
 void
 sendCommand(uint8_t command) {
     BSP_AUDIO_IN_Stop(); // Ensure no other process can modify txBuffer
-    rf24.flush_tx();     // Empty transmission queue
     rf24.openWritingPipe(pipes[2]);
     rf24.setRetries(5, 15);
+    rf24.flush_tx();     // Empty transmission queue
     uint32_t elapsedTime = HAL_GetTick();
     uint32_t t0 = HAL_GetTick()-QUERY_INTERVAL-1; // Just to force the first send.
-    bool bTimeout = false;
-    bool bBaseDisConnected = false;
-    bool bGateOpened = false;
-    bool bCarGateOpened = false;
-    bool bCanProceed = false;
+    bool bTimeout       = false;
+    bBaseDisconnected   = false;
+    bool bCommandDone   = false;
     ledsOff();
     txBuffer[0] = command;
     do {
@@ -673,44 +641,26 @@ sendCommand(uint8_t command) {
             BSP_LED_On(LED_ORANGE); // Signal the packet's start reading
             rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
             BSP_LED_Off(LED_ORANGE); // Reading done
-            if(rxBuffer[0] == suspendAck) {
-                bBaseDisConnected = true;
+            uint8_t answer = *rxBuffer;
+            if(answer == suspendAck) {
+                bBaseDisconnected = true;
+                bCommandDone = true;
             }
-            if(rxBuffer[0] == openGateAck) {
-                bGateOpened = true;
+            if(answer == openGateAck) {
+                rf24.openWritingPipe(pipes[0]);
+                rf24.setRetries(0, 1);
+                BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE); // Restart sending Audio Data
+                bCommandDone = true;
             }
-            if(rxBuffer[0] == suspendAck) {
-                bCarGateOpened = true;
+            if(answer == openCarGateAck) {
+                rf24.openWritingPipe(pipes[0]);
+                rf24.setRetries(0, 1);
+                BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE); // Restart sending Audio Data
+                bCommandDone = true;
             }
-            HAL_Delay(50);
-        }
+        } // if(bRadioDataAvailable)
         bTimeout = (HAL_GetTick() - elapsedTime) > MAX_WAIT_ACK_TIME;
-        bCanProceed = bBaseDisConnected || bGateOpened || bCarGateOpened ;
-    } while(!bCanProceed && !bTimeout);
-    if(command==suspendCmd) {
-        bSuspend = true;
-    }
-}
-
-
-void
-processReceivedCommand(uint8_t command, uint8_t sourcePipe) {
-    if(command == suspendCmd) {
-        txBuffer[0] = suspendAck;
-        bSuspend = true;
-    }
-    else if(command == openGateCmd) {
-        txBuffer[0] = openGateAck;
-        pulseRelay(GATE_RELAY_TIM_CHANNEL, 1500);
-    }
-    else if(command == openCarGateCmd) {
-        txBuffer[0] = openCarGateAck;
-        pulseRelay(CAR_GATE_RELAY_TIM_CHANNEL, 1500);
-    }
-    else
-        Error_Handler();
-    rf24.writeAckPayload(sourcePipe, txBuffer, MAX_PAYLOAD_SIZE);
-    HAL_Delay(300);
+    } while(!bCommandDone && !bTimeout);
 }
 
 
@@ -1090,7 +1040,7 @@ void
 BSP_AUDIO_IN_TransferComplete_CallBack(void) {
     BSP_AUDIO_IN_PDMToPCM(&pdmDataIn[INTERNAL_BUFF_SIZE/2], pcmDataOut);
     for(uint16_t i=0; i<PCM_OUT_SIZE; i++) {
-        txBuffer[i+PCM_OUT_SIZE] = 0;//(pcmDataOut[i<<1] >> 8) & 0xFF;
+        txBuffer[i+PCM_OUT_SIZE] = (pcmDataOut[i<<1] >> 8) & 0xFF;
     }
     rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
     bReady2Send = true;
@@ -1101,7 +1051,7 @@ void
 BSP_AUDIO_IN_HalfTransfer_CallBack(void) {
     BSP_AUDIO_IN_PDMToPCM((uint16_t*)&pdmDataIn[0], (uint16_t*)&pcmDataOut[0]);
     for(uint16_t i=0; i<PCM_OUT_SIZE; i++) {
-        txBuffer[i] = 0;//(pcmDataOut[i<<1] >> 8) & 0xFF;
+        txBuffer[i] = (pcmDataOut[i<<1] >> 8) & 0xFF;
     }
 }
 
