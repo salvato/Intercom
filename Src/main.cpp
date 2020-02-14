@@ -39,13 +39,15 @@
 
 // Commands
 typedef enum {
-    connectRequest = 0x10,
+    connectRequest      = 0x10,
     connectionAccepted,
     connectionTimedOut,
     suspendCmd,
     suspendAck,
     openGateCmd,
+    openGateAck,
     openCarGateCmd,
+    openCarGateAck
 } Commands;
 
 
@@ -71,7 +73,7 @@ static bool prepareFileSystem();
 static void startAlarm();
 static bool updateAlarm();
 static void stopAlarm();
-static void processCommand(uint8_t command);
+static void processCommand(uint8_t command, uint8_t sourcePipe);
 static void relayTIM3Init();
 static void pulseRelay(uint32_t relayChannel, uint16_t msPulse);
 static void timeoutTIM7Init();
@@ -136,9 +138,9 @@ __IO uint32_t AudioRemSize;
 WAVE_FormatTypeDef waveformat;
 
 
-__IO bool tx_ok;
-__IO bool tx_failed;
-__IO bool rx_data_ready;
+__IO bool txOk;
+__IO bool txFailed;
+__IO bool rxDataReady;
 __IO bool bRadioIrq;
 __IO bool bReady2Send;
 __IO bool bReady2Play;
@@ -538,7 +540,7 @@ connectRemote() {
 
 void
 processBase() {
-    uint8_t pipe_num;
+    uint8_t pipeNum;
     BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
     setRole(PRX); // Change role from PTX to PRX...
     rf24.flush_rx();
@@ -561,34 +563,21 @@ processBase() {
     while(!bSuspend && !bTimeoutElapsed) {
         if(bRadioDataAvailable) {
             bRadioDataAvailable = false;
-            rf24.available(&pipe_num);
-            if(pipe_num == 2) {// The packet is a command
-                BSP_LED_On(LED_BLUE); // Signal the packet's start reading
-                rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
-                uint8_t command = rxBuffer[0];
-                BSP_LED_Off(LED_BLUE); // Reading done
-                if(command == suspendCmd) {
-                    txBuffer[0] = suspendAck;
-                    bSuspend = true;
-                    rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
-                    HAL_Delay(300);
-                }
-                else if(command == openGateCmd) {
-                        pulseRelay(GATE_RELAY_TIM_CHANNEL, 1500);
-                }
-                else if(command == openCarGateCmd) {
-                        pulseRelay(CAR_GATE_RELAY_TIM_CHANNEL, 1500);
-                }
-                else
-                    Error_Handler();
+            rf24.available(&pipeNum);
+            BSP_LED_On(LED_BLUE); // Signal the packet's start reading
+            rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
+            BSP_LED_Off(LED_BLUE); // Reading done
+            if(pipeNum == 2) {// The packet is a command
+                processCommand(rxBuffer[0], pipeNum);
             }
-            else { // The packet contains Audio Data: first send our audio data...
-                rf24.writeAckPayload(pipe_num, txBuffer, MAX_PAYLOAD_SIZE);
+            else { // The packet contains Audio Data:
+                // At first replay with our audio data...
+                rf24.writeAckPayload(pipeNum, txBuffer, MAX_PAYLOAD_SIZE);
                 // then read the data...
                 BSP_LED_On(LED_BLUE); // Signal the packet's start reading
                 rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
                 BSP_LED_Off(LED_BLUE); // Reading done
-                // Save data in the current Audio out chunk...
+                // Place the data in the current Audio output chunk...
                 offset = chunk*MAX_PAYLOAD_SIZE;
                 for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
                     offset = (chunk*MAX_PAYLOAD_SIZE+indx) << 1;
@@ -601,7 +590,7 @@ processBase() {
     } // while(!bSuspend && !bTimeoutElapsed)
     stopTimeout();
     // Connection terminated...
-    HAL_TIM_Base_Stop(&Tim2Handle);
+    HAL_TIM_Base_Stop(&Tim2Handle);     // Stop ADC sampling...
     BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio and power down the Codec
     ledsOff();
 }
@@ -620,10 +609,11 @@ processRemote() {
     BSP_AUDIO_OUT_Play(Audio_Out_Buffer, 2*sizeof(*Audio_Out_Buffer)*MAX_PAYLOAD_SIZE);
     rf24.maskIRQ(false, false, false);
 
-    bSendOpenGate = false;
+    // Set the initial status...
+    bSendOpenGate    = false;
     bSendOpenCarGate = false;
-    bRadioIrq = true; // To force the first sending when we are ready to send
-    bSuspend = false;
+    bRadioIrq        = true; // Just to force sending when we are ready to send
+    bSuspend         = false;
     startTimeout(MAX_NO_SIGNAL_TIME);
     while(!bSuspend && !bTimeoutElapsed) {
         if(bReady2Send && bRadioIrq) { // We will send data only when available and
@@ -650,24 +640,30 @@ processRemote() {
             // We have done with the new data...
         } // if(bRadioDataAvailable)
         if(bSendOpenGate || bSendOpenCarGate) {
-            ledsOff();
-            BSP_LED_On(LED_BLUE);
-            bSendOpenGate = false;
-            bSendOpenCarGate = false;
             BSP_AUDIO_IN_Stop(); // Ensure no other process can modify txBuffer
+            ledsOff();
+            rf24.flush_tx();     // Empty transmission queue
             rf24.openWritingPipe(pipes[2]);
             rf24.setRetries(5, 15);
-            rf24.flush_tx();
-            txBuffer[0] = bSendOpenGate ? openGateCmd : openCarGateCmd;
-            rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-            rf24.startWrite();
+            BSP_LED_On(LED_BLUE);
+            if(bSendOpenGate) {
+                txBuffer[0] = openGateCmd;
+                rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+                rf24.startWrite();
+                bSendOpenGate = false;
+            }
+            if(bSendOpenCarGate) {
+                txBuffer[0] = openCarGateCmd;
+                rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+                rf24.startWrite();
+                bSendOpenCarGate = false;
+            }
             HAL_Delay(50);
             BSP_LED_Off(LED_BLUE);
             rf24.openWritingPipe(pipes[0]);
             rf24.setRetries(1, 0);
             BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE); // Resart sending audio
         }
-        USBH_Process(&hUSB_Host); // USBH_Background Process
     } // while(!bSuspend && ! bTimeoutElapsed)
     stopTimeout();
 
@@ -700,7 +696,6 @@ processRemote() {
                 HAL_Delay(50);
             }
         }
-        USBH_Process(&hUSB_Host); // USBH_Background Process
     } while(!bBaseDisConnected && !bTimeoutElapsed);
     stopTimeout();
     // Connection terminated...
@@ -709,18 +704,23 @@ processRemote() {
 
 
 void
-processCommand(uint8_t command) {
-    switch(command) {
-        case openGateCmd:
-            pulseRelay(GATE_RELAY_TIM_CHANNEL, 1500);
-            break;
-        case openCarGateCmd:
-            pulseRelay(CAR_GATE_RELAY_TIM_CHANNEL, 1500);
-            break;
-        default:
-            pulseRelay(GATE_RELAY_TIM_CHANNEL, 1500);
-            break;
+processCommand(uint8_t command, uint8_t sourcePipe) {
+    if(command == suspendCmd) {
+        txBuffer[0] = suspendAck;
+        bSuspend = true;
     }
+    else if(command == openGateCmd) {
+        txBuffer[0] = openGateAck;
+        pulseRelay(GATE_RELAY_TIM_CHANNEL, 1500);
+    }
+    else if(command == openCarGateCmd) {
+        txBuffer[0] = openCarGateAck;
+        pulseRelay(CAR_GATE_RELAY_TIM_CHANNEL, 1500);
+    }
+    else
+        Error_Handler();
+    rf24.writeAckPayload(sourcePipe, txBuffer, MAX_PAYLOAD_SIZE);
+    HAL_Delay(300);
 }
 
 
@@ -1012,18 +1012,18 @@ OTG_FS_IRQHandler(void) {
 void
 EXTI15_10_IRQHandler(void) { // We received a radio interrupt...
     // Read & reset the IRQ status
-    rf24.whatHappened(&tx_ok, &tx_failed, &rx_data_ready);
+    rf24.whatHappened(&txOk, &txFailed, &rxDataReady);
 
-    if(rx_data_ready) {
+    if(rxDataReady) {
         bRadioDataAvailable = true;
     }
 
-    if(!isBaseStation && tx_ok) { // TX_DS IRQ asserted when the ACK packet has been received.
+    if(!isBaseStation && txOk) { // TX_DS IRQ asserted when the ACK packet has been received.
         BSP_LED_Off(LED_RED); // Reset previous errors signal
         BSP_LED_On(LED_BLUE); // Signal a good transmission
     }
 
-    if(!isBaseStation && tx_failed) {// nRF24L01+ asserts the IRQ pin when MAX_RT is reached
+    if(!isBaseStation && txFailed) {// nRF24L01+ asserts the IRQ pin when MAX_RT is reached
         // but the payload in TX FIFO is NOT removed!
         BSP_LED_On(LED_RED);
         BSP_LED_Off(LED_ORANGE);
