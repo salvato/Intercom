@@ -639,65 +639,75 @@ processRemote() {
             resetTimeout();
             // We have done with the new data...
         } // if(bRadioDataAvailable)
-        if(bSendOpenGate || bSendOpenCarGate) {
+        if(bSendOpenGate || bSendOpenCarGate || bSuspend) {
             BSP_AUDIO_IN_Stop(); // Ensure no other process can modify txBuffer
+            if(bSuspend) {
+                BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio and switch off the codec
+            }
             ledsOff();
             rf24.flush_tx();     // Empty transmission queue
             rf24.openWritingPipe(pipes[2]);
             rf24.setRetries(5, 15);
-            BSP_LED_On(LED_BLUE);
-            if(bSendOpenGate) {
-                txBuffer[0] = openGateCmd;
-                rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-                rf24.startWrite();
-                bSendOpenGate = false;
-            }
-            if(bSendOpenCarGate) {
-                txBuffer[0] = openCarGateCmd;
-                rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-                rf24.startWrite();
-                bSendOpenCarGate = false;
-            }
+            uint32_t elapsedTime = HAL_GetTick();
+            uint32_t t0 = HAL_GetTick()-QUERY_INTERVAL-1; // Just to force the first send.
+            bool bTimeout = false;
+            bool bBaseDisConnected = false;
+            bool bGateOpened = false;
+            bool bCarGateOpened = false;
+            bool bCanProceed = false;
+            do {
+                if(HAL_GetTick()-t0 > QUERY_INTERVAL) {
+                    t0 = HAL_GetTick();
+                    BSP_LED_On(LED_BLUE);
+                    if(bSuspend) {
+                        txBuffer[0] = suspendCmd;
+                        rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+                        rf24.startWrite();
+                    }
+                    if(bSendOpenGate) {
+                        txBuffer[0] = openGateCmd;
+                        rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+                        rf24.startWrite();
+                        bSendOpenGate = false;
+                    }
+                    if(bSendOpenCarGate) {
+                        txBuffer[0] = openCarGateCmd;
+                        rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+                        rf24.startWrite();
+                    }
+                    BSP_LED_Off(LED_BLUE);
+                }
+                if(bRadioDataAvailable) {
+                    bRadioDataAvailable = false;
+                    BSP_LED_On(LED_ORANGE); // Signal the packet's start reading
+                    rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
+                    BSP_LED_Off(LED_ORANGE); // Reading done
+                    if(rxBuffer[0] == suspendAck) {
+                        bBaseDisConnected = true;
+                    }
+                    if(rxBuffer[0] == openGateAck) {
+                        bGateOpened = true;
+                    }
+                    if(rxBuffer[0] == suspendAck) {
+                        bCarGateOpened = true;
+                    }
+                    HAL_Delay(50);
+                }
+                bTimeout = (HAL_GetTick() - elapsedTime) > MAX_WAIT_ACK_TIME;
+                bCanProceed = bBaseDisConnected || bGateOpened || bCarGateOpened ;
+            } while(!bCanProceed && !bTimeout);
+
             HAL_Delay(50);
             BSP_LED_Off(LED_BLUE);
+            bSendOpenCarGate = false;
             rf24.openWritingPipe(pipes[0]);
             rf24.setRetries(1, 0);
-            BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE); // Resart sending audio
+            if(!bSuspend)
+                BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE); // Resart sending audio
         }
     } // while(!bSuspend && ! bTimeoutElapsed)
     stopTimeout();
 
-    ledsOff();
-    BSP_AUDIO_IN_Stop();               // Stop sending Audio Data
-    BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio and switch off the codec
-    rf24.openWritingPipe(pipes[2]);
-    rf24.setRetries(5, 15);
-    rf24.flush_rx();
-
-    startTimeout(MAX_WAIT_ACK_TIME);
-    uint32_t t0 = HAL_GetTick()-QUERY_INTERVAL-1; // Just to start the first request.
-    bool bBaseDisConnected = false;
-    do {
-        if(HAL_GetTick()-t0 > QUERY_INTERVAL) {
-            t0 = HAL_GetTick();
-            BSP_LED_On(LED_BLUE);
-            txBuffer[0] = suspendCmd;
-            rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-            rf24.startWrite();
-            BSP_LED_Off(LED_BLUE);
-        }
-        if(bRadioDataAvailable) {
-            bRadioDataAvailable = false;
-            BSP_LED_On(LED_ORANGE); // Signal the packet's start reading
-            rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
-            BSP_LED_Off(LED_ORANGE); // Reading done
-            if(rxBuffer[0] == suspendAck) {
-                bBaseDisConnected = true;
-                HAL_Delay(50);
-            }
-        }
-    } while(!bBaseDisConnected && !bTimeoutElapsed);
-    stopTimeout();
     // Connection terminated...
     ledsOff();
 }
