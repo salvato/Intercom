@@ -548,6 +548,7 @@ processReceivedCommand(uint8_t command, uint8_t sourcePipe) {
         relayPulse(CAR_GATE_RELAY_TIM_CHANNEL, 1500);
     }
     rf24.writeAckPayload(sourcePipe, txBuffer, MAX_PAYLOAD_SIZE);
+    HAL_Delay(1);
 }
 
 
@@ -665,6 +666,7 @@ sendCommand(uint8_t command) {
         rf24.setRetries(1, 0);
         BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE); // Restart sending Audio Data
     }
+    HAL_Delay(150);
 }
 
 
