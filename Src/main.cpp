@@ -495,6 +495,7 @@ processBase() {
     bSuspend = false;
     bRadioDataAvailable = false;
     uint32_t startTimeout = HAL_GetTick();
+    uint8_t command;
     do {
         if(bRadioDataAvailable) {
             bRadioDataAvailable = false;
@@ -502,6 +503,7 @@ processBase() {
             rf24.available(&pipeNum);
             BSP_LED_On(LED_BLUE); // Signal the packet's start reading
             rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
+            command = rxBuffer[0];
             BSP_LED_Off(LED_BLUE); // Reading done
             if(pipeNum == 1) { // The packet contains Audio Data:
                 // At first replay with our audio data...
@@ -515,17 +517,19 @@ processBase() {
                 }
             }
             else { // The packet is a command
-                processReceivedCommand(rxBuffer[0], pipeNum);
+                HAL_TIM_Base_Stop(&Tim2Handle);
+                processReceivedCommand(command, pipeNum);
+                HAL_TIM_Base_Start(&Tim2Handle);
             } // We have done with the new data.
         } // if(bRadioDataAvailable)
         bTimeoutElapsed = (HAL_GetTick()-startTimeout) > MAX_NO_SIGNAL_TIME;
     } while(!bSuspend && !bTimeoutElapsed);
     ledsOff();
-    HAL_Delay(300);
 
     // Connection terminated...
     HAL_TIM_Base_Stop(&Tim2Handle);     // Stop ADC sampling...
     BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio and power down the Codec
+    HAL_Delay(300);
 }
 
 
@@ -657,9 +661,9 @@ sendCommand(uint8_t command) {
     } while(!bCommandDone && !bTimeout);
 
     if(!bBaseDisconnected) {
-        BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE); // Restart sending Audio Data
         rf24.openWritingPipe(pipes[0]);
         rf24.setRetries(1, 0);
+        BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE); // Restart sending Audio Data
     }
 }
 
