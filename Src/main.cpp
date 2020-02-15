@@ -208,139 +208,18 @@ main(void) {
     rf24.clearInterrupts();// Avoid false interrupts from Radio
     rf24.maskIRQ(false, false, false);
 
+    // The endless loop...
     while(true) {
         if(isBaseStation) {
-            connectBase();// We will be woken up by a button press
+            connectBase(); // Base will be woken up by a button press
             processBase();
         }
         else {
-            connectRemote();// We will be woken up by receiving a command from Base
+            connectRemote(); // Remote will be woken up by receiving a command from Base
             processRemote();
         }
     }
 
-}
-
-
-void
-relayTIM3Init() {
-  TIM_ClockConfigTypeDef  sClockSourceConfig;
-  TIM_OC_InitTypeDef      sConfigOC;
-
-  __HAL_RCC_TIM3_CLK_ENABLE();
-
-  // Compute the prescaler value, to have TIM3Freq = 1KHz
-  uint32_t uwPrescalerValue = (uint32_t)((SystemCoreClock) / 1000) - 1;
-
-  Tim3Handle.Instance = TIM3;
-  Tim3Handle.Init.Prescaler         = uwPrescalerValue;
-  Tim3Handle.Init.CounterMode       = TIM_COUNTERMODE_UP;
-  Tim3Handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  Tim3Handle.Init.Period            = 300;
-  Tim3Handle.Init.ClockDivision     = TIM_CLOCKDIVISION_DIV1;
-  if (HAL_TIM_Base_Init(&Tim3Handle) != HAL_OK) {
-    Error_Handler();
-  }
-
-  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
-  if (HAL_TIM_ConfigClockSource(&Tim3Handle, &sClockSourceConfig) != HAL_OK) {
-    Error_Handler();
-  }
-
-  if (HAL_TIM_OC_Init(&Tim3Handle) != HAL_OK) {
-    Error_Handler();
-  }
-
-  sConfigOC.Pulse      = 10; // will be overwritten
-  sConfigOC.OCMode     = TIM_OCMODE_TIMING;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_OC_ConfigChannel(&Tim3Handle, &sConfigOC, TIM_CHANNEL_ALL) != HAL_OK) {
-    Error_Handler();
-  }
-
-  HAL_NVIC_SetPriority(TIM3_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(TIM3_IRQn);
-}
-
-
-void
-relayPulse(uint32_t relayChannel, uint16_t msPulse) {
-    GPIO_TypeDef* port;
-    uint32_t pin;
-    if(relayChannel == GATE_RELAY_TIM_CHANNEL) {
-        port = GATE_RELAY_GPIO_PORT;
-        pin  = GATE_RELAY_GPIO_PIN;
-    }
-    if(relayChannel == CAR_GATE_RELAY_TIM_CHANNEL) {
-        port = CAR_GATE_RELAY_GPIO_PORT;
-        pin  = CAR_GATE_RELAY_GPIO_PIN;
-    }
-    if(relayChannel == FREE1_RELAY_TIM_CHANNEL) {
-        port = FREE1_RELAY_GPIO_PORT;
-        pin  = FREE1_RELAY_GPIO_PIN;
-    }
-//    if(relayChannel == FREE2_RELAY_TIM_CHANNEL) {
-//        port = FREE2_RELAY_GPIO_PORT;
-//        pin  = FREE2_RELAY_GPIO_PIN;
-//    }
-
-    HAL_GPIO_WritePin(port, pin, GPIO_PIN_RESET); // will reset on interrupt service routine
-
-    Tim3Handle.Instance->ARR = msPulse;
-    __HAL_TIM_CLEAR_IT(&Tim3Handle, relayChannel);
-    if(HAL_TIM_OC_Start_IT(&Tim3Handle, relayChannel) != HAL_OK) {
-      Error_Handler();
-    }
-}
-
-
-void
-USBH_UserProcess (USBH_HandleTypeDef *pHost, uint8_t vId) {
-    UNUSED(pHost);
-
-    switch(vId) {
-        case HOST_USER_SELECT_CONFIGURATION:
-            break;
-        case HOST_USER_DISCONNECTION:
-            AppliState = APPLICATION_IDLE;
-            f_mount(NULL, (TCHAR const*)"", 0);
-            break;
-        case HOST_USER_CLASS_ACTIVE:
-            AppliState = APPLICATION_START;
-            break;
-        case HOST_USER_CONNECTION:
-            break;
-        case HOST_USER_CLASS_SELECTED:
-            break;
-        case HOST_USER_UNRECOVERED_ERROR:
-            break;
-        default: // No other cases at present !
-            break;
-    } //switch(vId)
-}
-
-
-bool
-prepareFileSystem() {
-    // Link the USB Host disk I/O
-    if(FATFS_LinkDriver(&USBH_Driver, USBDISKPath) != 0) return false;
-    if(USBH_Init(&hUSB_Host, USBH_UserProcess, 0) != USBH_OK) return false;
-    if(USBH_RegisterClass(&hUSB_Host, USBH_MSC_CLASS) != USBH_OK) return false;
-    if(USBH_Start(&hUSB_Host) != USBH_OK) return false;
-
-    USBH_USR_ApplicationState = USBH_USR_FS_INIT;
-    uint32_t startTime = HAL_GetTick();
-    while(AppliState != APPLICATION_START && !bTimeoutElapsed) {
-        USBH_Process(&hUSB_Host); // USBH_Background Process
-    }
-    if(HAL_GetTick()-startTime > 5000) // USB Disk not responding...
-        Error_Handler();
-
-    // Initializes (mount) the File System
-    if(f_mount(&USBDISKFatFs, (TCHAR const*)USBDISKPath, 0 ) != FR_OK ) return false;
-    if(f_opendir(&Directory, path) != FR_OK) return false;
-    USBH_USR_ApplicationState = USBH_USR_AUDIO;
-    return true;
 }
 
 
@@ -389,6 +268,7 @@ connectBase() {
             }
             bTimeoutElapsed = (HAL_GetTick()-startTime) > MAX_CONNECTION_TIME;
         } while(!bBaseConnected && !bTimeoutElapsed);
+
         ledsOff();
         if(!bBaseConnected) {
             txBuffer[0] = connectionTimedOut;
@@ -399,6 +279,7 @@ connectBase() {
             HAL_Delay(1);
         }
     } while(!bBaseConnected);
+
     // Connection with the Remote established...
     BSP_LED_Off(LED_RED);
 }
@@ -447,7 +328,7 @@ connectRemote() {
             stopAlarm();
 
             if(!bConnectionTimedOut && bConnectionAccepted) {
-                uint32_t startTime = HAL_GetTick();
+                uint32_t startTime = HAL_GetTick();    
                 do {
                     if(bRadioDataAvailable) {
                         bRadioDataAvailable = false;
@@ -465,8 +346,10 @@ connectRemote() {
                     bTimeoutElapsed = (HAL_GetTick()-startTime) > MAX_WAIT_ACK_TIME;
                 } while(!bRemoteConnected && !bTimeoutElapsed);
             } // if(!bConnectionTimedOut && bConnectionAccepted)
+
         } // if(rxBuffer[0] == connectRequest)
     } // while(!bRemoteConnected)
+
     // Connection with the Base established...
     BSP_LED_Off(LED_RED);
 }
@@ -475,6 +358,7 @@ connectRemote() {
 void
 processBase() {
     uint8_t pipeNum;
+    uint8_t base;
     setRole(PRX); // Change role from PTX to PRX...
     rf24.flush_rx();
     rf24.setRetries(1, 0); // We have to be fast !!!
@@ -495,7 +379,6 @@ processBase() {
     bSuspend = false;
     bRadioDataAvailable = false;
     uint32_t startTimeout = HAL_GetTick();
-    uint8_t command;
     do {
         if(bRadioDataAvailable) {
             bRadioDataAvailable = false;
@@ -503,13 +386,12 @@ processBase() {
             rf24.available(&pipeNum);
             BSP_LED_On(LED_BLUE); // Signal the packet's start reading
             rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
-            command = rxBuffer[0];
             BSP_LED_Off(LED_BLUE); // Reading done
             if(pipeNum == 1) { // The packet contains Audio Data:
                 // At first replay with our audio data...
                 rf24.writeAckPayload(pipeNum, txBuffer, MAX_PAYLOAD_SIZE);
                 // Then place the data in the current Audio output chunk...
-                uint8_t base = chunk*MAX_PAYLOAD_SIZE;
+                base = chunk*MAX_PAYLOAD_SIZE;
                 for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
                     offset = (base+indx) << 1;
                     Audio_Out_Buffer[offset]   = rxBuffer[indx] << 8; // 1st Stereo Channel
@@ -518,16 +400,17 @@ processBase() {
             }
             else { // The packet is a command
                 HAL_TIM_Base_Stop(&Tim2Handle);
-                processReceivedCommand(command, pipeNum);
+                processReceivedCommand(rxBuffer[0], pipeNum);
                 HAL_TIM_Base_Start(&Tim2Handle);
             } // We have done with the new data.
         } // if(bRadioDataAvailable)
         bTimeoutElapsed = (HAL_GetTick()-startTimeout) > MAX_NO_SIGNAL_TIME;
+
     } while(!bSuspend && !bTimeoutElapsed);
     ledsOff();
 
     // Connection terminated...
-    HAL_TIM_Base_Stop(&Tim2Handle);     // Stop ADC sampling...
+    HAL_TIM_Base_Stop(&Tim2Handle);    // Stop ADC sampling...
     BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio and power down the Codec
     HAL_Delay(300);
 }
@@ -727,6 +610,128 @@ stopAlarm() {
     BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW);
     free(Audio_Buffer);
     f_close(&FileRead);
+}
+
+
+void
+relayTIM3Init() {
+  TIM_ClockConfigTypeDef sClockSourceConfig;
+  TIM_OC_InitTypeDef     sConfigOC;
+
+  __HAL_RCC_TIM3_CLK_ENABLE();
+
+  // Compute the prescaler value, to have TIM3Freq = 1KHz
+  uint32_t uwPrescalerValue = (uint32_t)((SystemCoreClock) / 1000) - 1;
+
+  Tim3Handle.Instance = TIM3;
+  Tim3Handle.Init.Prescaler         = uwPrescalerValue;
+  Tim3Handle.Init.CounterMode       = TIM_COUNTERMODE_UP;
+  Tim3Handle.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  Tim3Handle.Init.Period            = 300;
+  Tim3Handle.Init.ClockDivision     = TIM_CLOCKDIVISION_DIV1;
+  if(HAL_TIM_Base_Init(&Tim3Handle) != HAL_OK) {
+    Error_Handler();
+  }
+
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if(HAL_TIM_ConfigClockSource(&Tim3Handle, &sClockSourceConfig) != HAL_OK) {
+    Error_Handler();
+  }
+
+  if(HAL_TIM_OC_Init(&Tim3Handle) != HAL_OK) {
+    Error_Handler();
+  }
+
+  sConfigOC.Pulse      = 10; // will be overwritten
+  sConfigOC.OCMode     = TIM_OCMODE_TIMING;
+  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+  if(HAL_TIM_OC_ConfigChannel(&Tim3Handle, &sConfigOC, TIM_CHANNEL_ALL) != HAL_OK) {
+    Error_Handler();
+  }
+
+  HAL_NVIC_SetPriority(TIM3_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(TIM3_IRQn);
+}
+
+
+void
+relayPulse(uint32_t relayChannel, uint16_t msPulse) {
+    GPIO_TypeDef* port;
+    uint32_t pin;
+    if(relayChannel == GATE_RELAY_TIM_CHANNEL) {
+        port = GATE_RELAY_GPIO_PORT;
+        pin  = GATE_RELAY_GPIO_PIN;
+    }
+    if(relayChannel == CAR_GATE_RELAY_TIM_CHANNEL) {
+        port = CAR_GATE_RELAY_GPIO_PORT;
+        pin  = CAR_GATE_RELAY_GPIO_PIN;
+    }
+    if(relayChannel == FREE1_RELAY_TIM_CHANNEL) {
+        port = FREE1_RELAY_GPIO_PORT;
+        pin  = FREE1_RELAY_GPIO_PIN;
+    }
+//    if(relayChannel == FREE2_RELAY_TIM_CHANNEL) {
+//        port = FREE2_RELAY_GPIO_PORT;
+//        pin  = FREE2_RELAY_GPIO_PIN;
+//    }
+
+    HAL_GPIO_WritePin(port, pin, GPIO_PIN_RESET); // will reset on interrupt service routine
+
+    Tim3Handle.Instance->ARR = msPulse;
+    __HAL_TIM_CLEAR_IT(&Tim3Handle, relayChannel);
+    if(HAL_TIM_OC_Start_IT(&Tim3Handle, relayChannel) != HAL_OK) {
+      Error_Handler();
+    }
+}
+
+
+void
+USBH_UserProcess (USBH_HandleTypeDef *pHost, uint8_t vId) {
+    UNUSED(pHost);
+
+    switch(vId) {
+        case HOST_USER_SELECT_CONFIGURATION:
+            break;
+        case HOST_USER_DISCONNECTION:
+            AppliState = APPLICATION_IDLE;
+            f_mount(NULL, (TCHAR const*)"", 0);
+            break;
+        case HOST_USER_CLASS_ACTIVE:
+            AppliState = APPLICATION_START;
+            break;
+        case HOST_USER_CONNECTION:
+            break;
+        case HOST_USER_CLASS_SELECTED:
+            break;
+        case HOST_USER_UNRECOVERED_ERROR:
+            break;
+        default: // No other cases at present !
+            break;
+    } //switch(vId)
+}
+
+
+bool
+prepareFileSystem() {
+    // Link the USB Host disk I/O
+    if(FATFS_LinkDriver(&USBH_Driver, USBDISKPath) != 0) return false;
+    if(USBH_Init(&hUSB_Host, USBH_UserProcess, 0) != USBH_OK) return false;
+    if(USBH_RegisterClass(&hUSB_Host, USBH_MSC_CLASS) != USBH_OK) return false;
+    if(USBH_Start(&hUSB_Host) != USBH_OK) return false;
+
+    USBH_USR_ApplicationState = USBH_USR_FS_INIT;
+    uint32_t startTime = HAL_GetTick();
+    while(AppliState != APPLICATION_START && !bTimeoutElapsed) {
+        USBH_Process(&hUSB_Host); // USBH_Background Process
+    }
+    if(HAL_GetTick()-startTime > 5000) // USB Disk not responding...
+        Error_Handler();
+
+    // Initializes (mount) the File System
+    if(f_mount(&USBDISKFatFs, (TCHAR const*)USBDISKPath, 0 ) != FR_OK ) return false;
+    if(f_opendir(&Directory, path) != FR_OK) return false;
+    USBH_USR_ApplicationState = USBH_USR_AUDIO;
+    return true;
 }
 
 
