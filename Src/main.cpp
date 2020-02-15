@@ -29,9 +29,9 @@
 
 //===============================================================
 #define MAX_CONNECTION_TIME  60000
-#define MAX_WAIT_ACK_TIME    5000
-#define MAX_NO_SIGNAL_TIME   10000
-#define QUERY_INTERVAL       300
+#define MAX_WAIT_ACK_TIME    300
+#define MAX_NO_SIGNAL_TIME   3000
+#define QUERY_INTERVAL       10
 
 // State Machine for the USBH_USR_ApplicationState
 #define USBH_USR_FS_INIT    ((uint8_t)0x00)
@@ -95,12 +95,12 @@ char buf[255];
 //       raises the Packet-Error-Rate.
 const uint8_t
 pipes[6][5] = { // Note that NRF24L01(+) expects address LSB first
-                {0x70, 0xCD, 0xAB, 0xCD, 0xAB},
-                {0x71, 0xCD, 0xAB, 0xCD, 0xAB},
-                {0x72, 0xCD, 0xAB, 0xCD, 0xAB},
-                {0x73, 0xCD, 0xAB, 0xCD, 0xAB},
-                {0x74, 0xCD, 0xAB, 0xCD, 0xAB},
-                {0x75, 0xCD, 0xAB, 0xCD, 0xAB}
+                  {0x70, 0xCD, 0xAB, 0xCD, 0xAB},
+                  {0x71, 0xCD, 0xAB, 0xCD, 0xAB},
+                  {0x72, 0xCD, 0xAB, 0xCD, 0xAB},
+                  {0x73, 0xCD, 0xAB, 0xCD, 0xAB},
+                  {0x74, 0xCD, 0xAB, 0xCD, 0xAB},
+                  {0x75, 0xCD, 0xAB, 0xCD, 0xAB}
               };
 
 
@@ -647,15 +647,9 @@ sendCommand(uint8_t command) {
                 bCommandDone = true;
             }
             if(answer == openGateAck) {
-                rf24.openWritingPipe(pipes[0]);
-                rf24.setRetries(0, 1);
-                BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE); // Restart sending Audio Data
                 bCommandDone = true;
             }
             if(answer == openCarGateAck) {
-                rf24.openWritingPipe(pipes[0]);
-                rf24.setRetries(0, 1);
-                BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE); // Restart sending Audio Data
                 bCommandDone = true;
             }
         } // if(bRadioDataAvailable)
@@ -663,7 +657,7 @@ sendCommand(uint8_t command) {
     } while(!bCommandDone && !bTimeout);
 
     if(!bBaseDisconnected) {
-        rf24.flush_tx();
+        BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE); // Restart sending Audio Data
         rf24.openWritingPipe(pipes[0]);
         rf24.setRetries(1, 0);
     }
@@ -951,12 +945,14 @@ adcTIM2Init(void) {
 
 void
 OTG_FS_IRQHandler(void) {
-  HAL_HCD_IRQHandler(&hhcd);
+    HAL_HCD_IRQHandler(&hhcd);
 }
 
 
 void
 EXTI15_10_IRQHandler(void) { // We received a radio interrupt...
+    __HAL_GPIO_EXTI_CLEAR_IT(NRF24_IRQ_PIN);
+
     // Read & reset the IRQ status
     rf24.whatHappened(&txOk, &txFailed, &rxDataReady);
 
@@ -964,19 +960,19 @@ EXTI15_10_IRQHandler(void) { // We received a radio interrupt...
         bRadioDataAvailable = true;
     }
 
-    if(!isBaseStation && txOk) { // TX_DS IRQ asserted when the ACK packet has been received.
+    if(txOk) { // TX_DS IRQ asserted when the ACK packet has been received.
         BSP_LED_Off(LED_RED); // Reset previous errors signal
         BSP_LED_On(LED_BLUE); // Signal a good transmission
     }
 
-    if(!isBaseStation && txFailed) {// nRF24L01+ asserts the IRQ pin when MAX_RT is reached
-        // but the payload in TX FIFO is NOT removed!
+    if(txFailed) { // nRF24L01+ asserts the IRQ pin when MAX_RT is reached
+                   // but the payload in TX FIFO is NOT removed!
         BSP_LED_On(LED_RED);
         BSP_LED_Off(LED_ORANGE);
         BSP_LED_Off(LED_BLUE);
+        rf24.flush_tx(); // There could be messeges not removed from the TX queue
     }
     bRadioIrq = true;
-    __HAL_GPIO_EXTI_CLEAR_IT(NRF24_IRQ_PIN);
 }
 
 
