@@ -384,7 +384,7 @@ connectBase() {
                 BSP_LED_Off(LED_ORANGE); // Reading done
                 if(rxBuffer[0] == connectionAccepted) {
                     bBaseConnected = true;
-                    HAL_Delay(50);
+                    HAL_Delay(1);
                 }
             }
             bTimeoutElapsed = (HAL_GetTick()-startTime) > MAX_CONNECTION_TIME;
@@ -396,6 +396,7 @@ connectBase() {
             rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
             rf24.startWrite();
             BSP_LED_Off(LED_BLUE);
+            HAL_Delay(1);
         }
     } while(!bBaseConnected);
     // Connection with the Remote established...
@@ -457,16 +458,14 @@ connectRemote() {
                             rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
                             BSP_LED_Off(LED_ORANGE);
                             bRemoteConnected = true;
-                            HAL_Delay(500); // Needed for unknown reasons...
+                            HAL_Delay(150); // Give time to send the Ack and to
+                                            // convert the Base into PRX mode
                         }
                     }
-                    USBH_Process(&hUSB_Host); // USBH_Background Process
                     bTimeoutElapsed = (HAL_GetTick()-startTime) > MAX_WAIT_ACK_TIME;
                 } while(!bRemoteConnected && !bTimeoutElapsed);
-            }
-            USBH_Process(&hUSB_Host); // USBH_Background Process
+            } // if(!bConnectionTimedOut && bConnectionAccepted)
         } // if(rxBuffer[0] == connectRequest)
-        USBH_Process(&hUSB_Host); // USBH_Background Process
     } // while(!bRemoteConnected)
     // Connection with the Base established...
     BSP_LED_Off(LED_RED);
@@ -522,7 +521,7 @@ processBase() {
         bTimeoutElapsed = (HAL_GetTick()-startTimeout) > MAX_NO_SIGNAL_TIME;
     } while(!bSuspend && !bTimeoutElapsed);
     ledsOff();
-    HAL_Delay(1000);
+    HAL_Delay(300);
 
     // Connection terminated...
     HAL_TIM_Base_Stop(&Tim2Handle);     // Stop ADC sampling...
@@ -612,6 +611,7 @@ processRemote() {
     BSP_AUDIO_IN_Stop();
     BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio and switch off the codec
     ledsOff();
+    HAL_Delay(150);
 }
 
 
