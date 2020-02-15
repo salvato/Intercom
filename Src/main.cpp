@@ -29,9 +29,9 @@
 
 //===============================================================
 #define MAX_CONNECTION_TIME  60000
-#define MAX_WAIT_ACK_TIME    300
+#define MAX_WAIT_ACK_TIME    500
 #define MAX_NO_SIGNAL_TIME   3000
-#define QUERY_INTERVAL       10
+#define QUERY_INTERVAL       100
 
 // State Machine for the USBH_USR_ApplicationState
 #define USBH_USR_FS_INIT    ((uint8_t)0x00)
