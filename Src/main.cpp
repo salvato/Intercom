@@ -629,14 +629,14 @@ sendCommand(uint8_t command) {
     ledsOff();
     txBuffer[0] = command;
     do {
-        if(HAL_GetTick()-t0 > QUERY_INTERVAL) {
+        if(HAL_GetTick()-t0 > QUERY_INTERVAL) { // Send the command
             t0 = HAL_GetTick();
             BSP_LED_On(LED_BLUE);
             rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
             rf24.startWrite();
             BSP_LED_Off(LED_BLUE);
         }
-        if(bRadioDataAvailable) {
+        if(bRadioDataAvailable) { // Get the Ack
             bRadioDataAvailable = false;
             BSP_LED_On(LED_ORANGE); // Signal the packet's start reading
             rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
@@ -661,6 +661,12 @@ sendCommand(uint8_t command) {
         } // if(bRadioDataAvailable)
         bTimeout = (HAL_GetTick() - elapsedTime) > MAX_WAIT_ACK_TIME;
     } while(!bCommandDone && !bTimeout);
+
+    if(!bBaseDisconnected) {
+        rf24.flush_tx();
+        rf24.openWritingPipe(pipes[0]);
+        rf24.setRetries(1, 0);
+    }
 }
 
 
