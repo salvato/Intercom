@@ -119,7 +119,7 @@ uint16_t* Audio_Out_Buffer = NULL;
 uint16_t* pdmDataIn        = NULL;
 uint16_t* pcmDataOut       = NULL;
 uint16_t  offset;
-uint32_t chunk = 0;
+uint32_t chunk2Write = 0;
 
 bool     isBaseStation;
 uint8_t  Volume;
@@ -247,7 +247,7 @@ connectBase() {
 
         // An external event has been detected: try to connect to a Remote !
         uint32_t t0 = HAL_GetTick()-QUERY_INTERVAL-1; // Just to send immediately the first request.
-        uint32_t startTime = HAL_GetTick();
+        uint32_t startTimeout = HAL_GetTick();
         do {
             if(HAL_GetTick()-t0 > QUERY_INTERVAL) {
                 t0 = HAL_GetTick();
@@ -267,7 +267,9 @@ connectBase() {
                     HAL_Delay(1);
                 }
             }
-            bTimeoutElapsed = (HAL_GetTick()-startTime) > MAX_CONNECTION_TIME;
+            if(HAL_GetTick() < startTimeout) // counter overflow
+                startTimeout = HAL_GetTick();
+            bTimeoutElapsed = (HAL_GetTick()-startTimeout) > MAX_CONNECTION_TIME;
         } while(!bBaseConnected && !bTimeoutElapsed);
 
         ledsOff();
@@ -330,7 +332,7 @@ connectRemote() {
             stopAlarm();
 
             if(!bConnectionTimedOut) {
-                uint32_t startTime = HAL_GetTick();    
+                uint32_t startTimeout = HAL_GetTick();
                 do { // Wait one more Connection Request...
                     if(bRadioDataAvailable) {
                         bRadioDataAvailable = false;
@@ -345,7 +347,9 @@ connectRemote() {
                                             // convert the Base into PRX mode
                         }
                     }
-                    bTimeoutElapsed = (HAL_GetTick()-startTime) > MAX_WAIT_ACK_TIME;
+                    if(HAL_GetTick() < startTimeout) // counter overflow
+                        startTimeout = HAL_GetTick();
+                    bTimeoutElapsed = (HAL_GetTick()-startTimeout) > MAX_WAIT_ACK_TIME;
                 } while(!bRemoteConnected && !bTimeoutElapsed);
             } // if(!bConnectionTimedOut)
 
@@ -372,7 +376,7 @@ processBase() {
     if(HAL_ADC_Start_DMA(&hAdc, (uint32_t*)adcDataIn, 2*MAX_PAYLOAD_SIZE) != HAL_OK) {
         Error_Handler();
     }
-    chunk = 0;
+    chunk2Write = 0;
     BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
     BSP_AUDIO_OUT_Play(Audio_Out_Buffer, 2*MAX_PAYLOAD_SIZE);
     // Enable ADC periodic sampling
@@ -398,9 +402,9 @@ processBase() {
                 // At first replay with our audio data...
                 rf24.writeAckPayload(pipeNum, txBuffer, MAX_PAYLOAD_SIZE);
                 // Then place the data in the current Audio output chunk...
-                base = chunk*MAX_PAYLOAD_SIZE;
+                base = chunk2Write*MAX_PAYLOAD_SIZE;
                 for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
-                    offset = base+(indx << 1);
+                    offset = (base+indx) << 1;
                     Audio_Out_Buffer[offset]   = rxBuffer[indx] << 8; // 1st Stereo Channel
                     Audio_Out_Buffer[offset+1] = rxBuffer[indx] << 8; // 2nd Stereo Channel
                 }
@@ -415,6 +419,8 @@ processBase() {
             } // We have done with the new data.
 
         } // if(bRadioDataAvailable)
+        if(HAL_GetTick() < startTimeout) // counter overflow
+            startTimeout = HAL_GetTick();
         bTimeoutElapsed = (HAL_GetTick()-startTimeout) > MAX_NO_SIGNAL_TIME;
 
     } while(!bSuspend && !bTimeoutElapsed);
@@ -458,7 +464,7 @@ processRemote() {
 
     BSP_AUDIO_IN_Init(DEFAULT_AUDIO_IN_FREQ, DEFAULT_AUDIO_IN_BIT_RESOLUTION, DEFAULT_AUDIO_IN_CHANNEL_NBR);
     BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
-    chunk = 0;
+    chunk2Write = 0;
     BSP_AUDIO_OUT_Play(Audio_Out_Buffer, 2*MAX_PAYLOAD_SIZE);
     BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE);
 
@@ -485,9 +491,9 @@ processRemote() {
             rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
             BSP_LED_Off(LED_BLUE); // Reading done
             // Write data in the current Audio Buffer chunk
-            offset = chunk*MAX_PAYLOAD_SIZE;
+            offset = chunk2Write*MAX_PAYLOAD_SIZE;
             for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
-                offset = (chunk*MAX_PAYLOAD_SIZE+indx) << 1;
+                offset = (chunk2Write*MAX_PAYLOAD_SIZE+indx) << 1;
                 Audio_Out_Buffer[offset]   = rxBuffer[indx] << 8; // 1st Stereo Channel
                 Audio_Out_Buffer[offset+1] = rxBuffer[indx] << 8; // 2nd Stereo Channel
             }
@@ -509,6 +515,8 @@ processRemote() {
             bSendOpenCarGate = false;
         }
 
+        if(HAL_GetTick() < startTimeout) // counter overflow
+            startTimeout = HAL_GetTick();
         bTimeoutElapsed = (HAL_GetTick()-startTimeout) > MAX_NO_SIGNAL_TIME;
     } while(!bBaseDisconnected && !bTimeoutElapsed);
 
@@ -526,7 +534,7 @@ sendCommand(uint8_t command) {
     rf24.openWritingPipe(pipes[2]);
     rf24.setRetries(5, 15);
     rf24.flush_tx();     // Empty transmission queue
-    uint32_t elapsedTime = HAL_GetTick();
+    uint32_t startTimeout = HAL_GetTick();
     uint32_t t0 = HAL_GetTick()-QUERY_INTERVAL-1; // Just to force the first send.
     bool bTimeout       = false;
     bBaseDisconnected   = false;
@@ -558,7 +566,10 @@ sendCommand(uint8_t command) {
                 bCommandDone = true;
             }
         } // if(bRadioDataAvailable)
-        bTimeout = (HAL_GetTick() - elapsedTime) > MAX_WAIT_ACK_TIME;
+
+        if(HAL_GetTick() < startTimeout) // counter overflow
+            startTimeout = HAL_GetTick();
+        bTimeout = (HAL_GetTick() - startTimeout) > MAX_WAIT_ACK_TIME;
     } while(!bCommandDone && !bTimeout);
 
     if(!bBaseDisconnected) {
@@ -1036,11 +1047,11 @@ void
 BSP_AUDIO_OUT_TransferComplete_CallBack(void) {
     if(bConnectionAccepted || bBaseConnected) {
         // Send the last received chunk to DAC
-        offset = chunk*MAX_PAYLOAD_SIZE*2;
+        uint8_t offset = chunk2Write*MAX_PAYLOAD_SIZE*2;
         BSP_AUDIO_OUT_ChangeBuffer(&Audio_Out_Buffer[offset], 2*MAX_PAYLOAD_SIZE);
         // Be ready for the next chunk
-        chunk = 1-chunk;
-        offset = chunk*MAX_PAYLOAD_SIZE*2;
+        chunk2Write = 1-chunk2Write;
+        offset = chunk2Write*MAX_PAYLOAD_SIZE*2;
         memset(&Audio_Out_Buffer[offset], 0, 2*MAX_PAYLOAD_SIZE*sizeof(*Audio_Out_Buffer));
     }
     else {
