@@ -322,7 +322,9 @@ connectRemote() {
                 }
                 if(bRadioDataAvailable) {
                     bRadioDataAvailable = false;
+                    BSP_LED_On(LED_BLUE);
                     rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
+                    BSP_LED_Off(LED_BLUE);
                     if(rxBuffer[0] == connectionTimedOut) {
                         bConnectionTimedOut = true;
                     }
