@@ -486,8 +486,8 @@ BSP_AUDIO_OUT_ClockConfig(I2S_HandleTypeDef *hi2s, uint32_t AudioFreq, void *Par
     /* PLLI2S_VCO Input = HSE_VALUE/PLL_M = 1 Mhz */
     if ((freqindex & 0x7) == 0) {
         /* I2S clock config
-    PLLI2S_VCO = f(VCO clock) = f(PLLI2S clock input) x (PLLI2SN/PLLM)
-    I2SCLK = f(PLLI2S clock output) = f(VCO clock) / PLLI2SR */
+        PLLI2S_VCO = f(VCO clock) = f(PLLI2S clock input) x (PLLI2SN/PLLM)
+        I2SCLK = f(PLLI2S clock output) = f(VCO clock) / PLLI2SR */
         rccclkinit.PeriphClockSelection = RCC_PERIPHCLK_I2S;
         rccclkinit.PLLI2S.PLLI2SN = I2SPLLN[freqindex];
         rccclkinit.PLLI2S.PLLI2SR = I2SPLLR[freqindex];
@@ -495,8 +495,8 @@ BSP_AUDIO_OUT_ClockConfig(I2S_HandleTypeDef *hi2s, uint32_t AudioFreq, void *Par
     }
     else {
         /* I2S clock config
-    PLLI2S_VCO = f(VCO clock) = f(PLLI2S clock input) x (PLLI2SN/PLLM)
-    I2SCLK = f(PLLI2S clock output) = f(VCO clock) / PLLI2SR */
+        PLLI2S_VCO = f(VCO clock) = f(PLLI2S clock input) x (PLLI2SN/PLLM)
+        I2SCLK = f(PLLI2S clock output) = f(VCO clock) / PLLI2SR */
         rccclkinit.PeriphClockSelection = RCC_PERIPHCLK_I2S;
         rccclkinit.PLLI2S.PLLI2SN = 258;
         rccclkinit.PLLI2S.PLLI2SR = 3;

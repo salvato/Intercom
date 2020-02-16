@@ -145,6 +145,7 @@ __IO bool bTimeoutElapsed;
 __IO bool bConnectionRequested;
 __IO bool bConnectionAccepted;
      bool bConnectionTimedOut;
+     bool bBaseConnected;
 __IO bool bSuspend;      // true if the Remote ask to suspend the connection
 __IO bool bRadioDataAvailable;
 __IO uint32_t startConnectTime;
@@ -209,7 +210,7 @@ main(void) {
     rf24.clearInterrupts();// Avoid false interrupts from Radio
     rf24.maskIRQ(false, false, false);
 
-    // The endless loop...
+    // The Endless loop...
     while(true) {
         if(isBaseStation) {
             connectBase(); // Base will be woken up by a button press
@@ -235,7 +236,6 @@ connectBase() {
     setRole(PTX);
     rf24.flush_tx();
     rf24.setRetries(5, 15);
-    bool bBaseConnected;
 
     do {
         BSP_LED_On(LED_RED);
@@ -392,23 +392,25 @@ processBase() {
             bRadioDataAvailable = false;
             startTimeout = HAL_GetTick();
             rf24.available(&pipeNum);
-            BSP_LED_On(LED_BLUE); // Signal the packet's start reading
             rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
-            BSP_LED_Off(LED_BLUE); // Reading done
             if(pipeNum == 1) { // The packet contains Audio Data:
+                BSP_LED_On(LED_BLUE); // Signal the packet's start reading
                 // At first replay with our audio data...
                 rf24.writeAckPayload(pipeNum, txBuffer, MAX_PAYLOAD_SIZE);
                 // Then place the data in the current Audio output chunk...
                 base = chunk*MAX_PAYLOAD_SIZE;
                 for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
-                    offset = (base+indx) << 1;
+                    offset = base+(indx << 1);
                     Audio_Out_Buffer[offset]   = rxBuffer[indx] << 8; // 1st Stereo Channel
                     Audio_Out_Buffer[offset+1] = rxBuffer[indx] << 8; // 2nd Stereo Channel
                 }
+                BSP_LED_Off(LED_BLUE); // Reading done
             }
             else { // The packet is a command
                 HAL_TIM_Base_Stop(&Tim2Handle); // Avoid interference with Audio Data...
+                BSP_AUDIO_OUT_Pause();
                 processReceivedCommand(rxBuffer[0], pipeNum);
+                BSP_AUDIO_OUT_Resume();
                 HAL_TIM_Base_Start(&Tim2Handle); // Restore Audio Data sampling...
             } // We have done with the new data.
 
@@ -453,11 +455,11 @@ processRemote() {
     setRole(PTX); // Change role from PRX to PTX...
     rf24.flush_tx();
     rf24.setRetries(1, 0); // We have to be fast !!!
-    rf24.maskIRQ(false, false, false);
+
     BSP_AUDIO_IN_Init(DEFAULT_AUDIO_IN_FREQ, DEFAULT_AUDIO_IN_BIT_RESOLUTION, DEFAULT_AUDIO_IN_CHANNEL_NBR);
     BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
     chunk = 0;
-    BSP_AUDIO_OUT_Play(Audio_Out_Buffer, 2*sizeof(*Audio_Out_Buffer)*MAX_PAYLOAD_SIZE);
+    BSP_AUDIO_OUT_Play(Audio_Out_Buffer, 2*MAX_PAYLOAD_SIZE);
     BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE);
 
     // Set the initial status...
@@ -496,14 +498,16 @@ processRemote() {
         if(bSuspend) {
             sendCommand(suspendCmd); // It also set bBaseDisconnected to true
         }
+
         if(bSendOpenGate) {
             sendCommand(openGateCmd);
+            bSendOpenGate    = false;
         }
+
         if(bSendOpenCarGate) {
             sendCommand(openCarGateCmd);
+            bSendOpenCarGate = false;
         }
-        bSendOpenGate    = false;
-        bSendOpenCarGate = false;
 
         bTimeoutElapsed = (HAL_GetTick()-startTimeout) > MAX_NO_SIGNAL_TIME;
     } while(!bBaseDisconnected && !bTimeoutElapsed);
@@ -795,14 +799,14 @@ initBuffers(bool isBaseStation) {
         rxBuffer = (uint8_t*)malloc(MAX_PAYLOAD_SIZE*sizeof(*rxBuffer));
     if(!Audio_Out_Buffer)
         Audio_Out_Buffer = (uint16_t*)malloc(2*2*MAX_PAYLOAD_SIZE*sizeof(*Audio_Out_Buffer));
-    memset(rxBuffer,           0, MAX_PAYLOAD_SIZE*sizeof(*rxBuffer));
+    memset(rxBuffer,         0, MAX_PAYLOAD_SIZE*sizeof(*rxBuffer));
     memset(Audio_Out_Buffer, 0, 2*2*MAX_PAYLOAD_SIZE*sizeof(*Audio_Out_Buffer));
 
     if(isBaseStation) {
         if(!adcDataIn)
             adcDataIn = (uint16_t*)malloc(2*MAX_PAYLOAD_SIZE*sizeof(*adcDataIn));
         if(!txBuffer)
-            txBuffer  = (uint8_t *)malloc(MAX_PAYLOAD_SIZE*sizeof(*txBuffer));
+            txBuffer  = (uint8_t *)malloc(2*MAX_PAYLOAD_SIZE*sizeof(*txBuffer));
         memset(adcDataIn,  0, 2*MAX_PAYLOAD_SIZE*sizeof(*adcDataIn));
         memset(txBuffer,   0, 2*MAX_PAYLOAD_SIZE*sizeof(*txBuffer));
     }
@@ -812,10 +816,10 @@ initBuffers(bool isBaseStation) {
         if(!pdmDataIn)
             pdmDataIn = (uint16_t*)malloc(INTERNAL_BUFF_SIZE*sizeof(*pdmDataIn));
         if(!pcmDataOut)
-            pcmDataOut = (uint16_t*)malloc(PCM_OUT_SIZE*sizeof(*pcmDataOut));
+            pcmDataOut = (uint16_t*)malloc(2*PCM_OUT_SIZE*sizeof(*pcmDataOut));
         memset(txBuffer,   0, 2*MAX_PAYLOAD_SIZE*sizeof(*txBuffer));
         memset(pdmDataIn,  0, INTERNAL_BUFF_SIZE*sizeof(*pdmDataIn));
-        memset(pcmDataOut, 0, PCM_OUT_SIZE*sizeof(*pcmDataOut));
+        memset(pcmDataOut, 0, 2*PCM_OUT_SIZE*sizeof(*pcmDataOut));
     }
 }
 
@@ -1030,7 +1034,7 @@ HAL_ADC_ErrorCallback(ADC_HandleTypeDef *hadc) {
 
 void
 BSP_AUDIO_OUT_TransferComplete_CallBack(void) {
-    if(bConnectionAccepted) {
+    if(bConnectionAccepted || bBaseConnected) {
         // Send the last received chunk to DAC
         offset = chunk*MAX_PAYLOAD_SIZE*2;
         BSP_AUDIO_OUT_ChangeBuffer(&Audio_Out_Buffer[offset], 2*MAX_PAYLOAD_SIZE);
@@ -1075,7 +1079,7 @@ BSP_AUDIO_IN_TransferComplete_CallBack(void) {
 
 void
 BSP_AUDIO_IN_HalfTransfer_CallBack(void) {
-    BSP_AUDIO_IN_PDMToPCM((uint16_t*)&pdmDataIn[0], (uint16_t*)&pcmDataOut[0]);
+    BSP_AUDIO_IN_PDMToPCM(pdmDataIn, pcmDataOut);
     for(uint16_t i=0; i<PCM_OUT_SIZE; i++) {
         txBuffer[i] = (pcmDataOut[i<<1] >> 8) & 0xFF;
     }
