@@ -24,7 +24,10 @@
 //===============================================================
 //#define AUDIO_OUT_IRQ_PREPRIO           0x0E
 //#define AUDIO_IN_IRQ_PREPRIO            0x0D
-#define RADIO_IN_IRQ_PREPRIO            0x0F
+  #define RADIO_IN_IRQ_PREPRIO            0x0F
+  #define PUSH_BTN_IRQ_PREPRIO            0x0F
+  #define ADC_DMA_IRQ_PREPRIO             0x02
+  #define RELAY_PULSE_IRQ_PREPRIO         0x0F
 
 
 //===============================================================
@@ -473,12 +476,12 @@ processRemote() {
     BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE);
 
     // Set the initial status...
-    bSuspend         = false;
+    bSuspend          = false;
     bBaseDisconnected = false;
-    bSendOpenGate    = false;
-    bSendOpenCarGate = false;
-    bReady2Send      = false;
-    bRadioIrq        = true; // To force sending as soon as we have data
+    bSendOpenGate     = false;
+    bSendOpenCarGate  = false;
+    bReady2Send       = false;
+    bRadioIrq         = true; // To force sending as soon as we have data
     uint32_t startTimeout = HAL_GetTick();
     do {
         if(bReady2Send && bRadioIrq) { // We will send data only when available and
@@ -682,7 +685,7 @@ relayTIM3Init() {
     Error_Handler();
   }
 
-  HAL_NVIC_SetPriority(TIM3_IRQn, 0, 0);
+  HAL_NVIC_SetPriority(TIM3_IRQn, RELAY_PULSE_IRQ_PREPRIO, 0);
   HAL_NVIC_EnableIRQ(TIM3_IRQn);
 }
 
@@ -788,7 +791,7 @@ PushButton_Init(GPIO_TypeDef* Port, uint32_t Pin, IRQn_Type Irq) {
     HAL_GPIO_Init(Port, &GPIO_InitStruct);
 
     // Enable and set Button EXTI Interrupt to the lowest priority
-    HAL_NVIC_SetPriority(Irq, 0x0F, 0);
+    HAL_NVIC_SetPriority(Irq, PUSH_BTN_IRQ_PREPRIO, 0);
     HAL_NVIC_EnableIRQ(Irq);
 }
 
@@ -912,7 +915,7 @@ HAL_ADC_MspInit(ADC_HandleTypeDef* hadc) {
 
     // Configure the NVIC for DMA
     // NVIC configuration for DMA transfer complete interrupt
-    HAL_NVIC_SetPriority(ADC1_DMA_IRQn, 2, 0);
+    HAL_NVIC_SetPriority(ADC1_DMA_IRQn, ADC_DMA_IRQ_PREPRIO, 0);
     HAL_NVIC_EnableIRQ(ADC1_DMA_IRQn);
 }
 
