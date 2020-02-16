@@ -141,7 +141,6 @@ __IO bool bRadioIrq;
 __IO bool bReady2Send;
 __IO bool bReady2Play;
 __IO bool bBaseSleeping;
-
 __IO bool bTimeoutElapsed;
 __IO bool bConnectionRequested;
 __IO bool bConnectionAccepted;
@@ -152,7 +151,9 @@ __IO uint32_t startConnectTime;
 __IO BUFFER_StateTypeDef buffer_offset;
 
 __IO bool bSendOpenGate;
+__IO bool bGateOpening;
 __IO bool bSendOpenCarGate;
+__IO bool bCarGateOpening;
 __IO bool bBaseDisconnected;
 
 
@@ -270,7 +271,7 @@ connectBase() {
         } while(!bBaseConnected && !bTimeoutElapsed);
 
         ledsOff();
-        if(!bBaseConnected) {
+        if(!bBaseConnected) { // Connection timed out...
             txBuffer[0] = connectionTimedOut;
             BSP_LED_On(LED_BLUE);
             rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
@@ -309,7 +310,8 @@ connectRemote() {
         BSP_LED_On(LED_BLUE);
         rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
         BSP_LED_Off(LED_BLUE);
-        if(rxBuffer[0] == connectRequest) {
+
+        if(rxBuffer[0] == connectRequest) { // Connection Request received...
             bConnectionRequested = true;
             startAlarm();
             while(!bConnectionAccepted && !bConnectionTimedOut) {
@@ -327,9 +329,9 @@ connectRemote() {
             }
             stopAlarm();
 
-            if(!bConnectionTimedOut && bConnectionAccepted) {
+            if(!bConnectionTimedOut) {
                 uint32_t startTime = HAL_GetTick();    
-                do {
+                do { // Wait one more Connection Request...
                     if(bRadioDataAvailable) {
                         bRadioDataAvailable = false;
                         rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
@@ -345,9 +347,10 @@ connectRemote() {
                     }
                     bTimeoutElapsed = (HAL_GetTick()-startTime) > MAX_WAIT_ACK_TIME;
                 } while(!bRemoteConnected && !bTimeoutElapsed);
-            } // if(!bConnectionTimedOut && bConnectionAccepted)
+            } // if(!bConnectionTimedOut)
 
         } // if(rxBuffer[0] == connectRequest)
+
     } // while(!bRemoteConnected)
 
     // Connection with the Base established...
@@ -376,10 +379,15 @@ processBase() {
     if(HAL_TIM_Base_Start(&Tim2Handle) != HAL_OK) Error_Handler();
     BSP_LED_On(LED_GREEN);
 
+    // Set the initial status....
     bSuspend = false;
+    bGateOpening = false;
+    bCarGateOpening = false;
     bRadioDataAvailable = false;
     uint32_t startTimeout = HAL_GetTick();
-    do {
+
+    do { // Loop until disconnected or contact lost...
+
         if(bRadioDataAvailable) {
             bRadioDataAvailable = false;
             startTimeout = HAL_GetTick();
@@ -399,10 +407,11 @@ processBase() {
                 }
             }
             else { // The packet is a command
-                HAL_TIM_Base_Stop(&Tim2Handle);
+                HAL_TIM_Base_Stop(&Tim2Handle); // Avoid interference with Audio Data...
                 processReceivedCommand(rxBuffer[0], pipeNum);
-                HAL_TIM_Base_Start(&Tim2Handle);
+                HAL_TIM_Base_Start(&Tim2Handle); // Restore Audio Data sampling...
             } // We have done with the new data.
+
         } // if(bRadioDataAvailable)
         bTimeoutElapsed = (HAL_GetTick()-startTimeout) > MAX_NO_SIGNAL_TIME;
 
@@ -424,14 +433,18 @@ processReceivedCommand(uint8_t command, uint8_t sourcePipe) {
     }
     else if(command == openGateCmd) {
         txBuffer[0] = openGateAck;
-        relayPulse(GATE_RELAY_TIM_CHANNEL, 1500);
+        if(!bGateOpening)
+            relayPulse(GATE_RELAY_TIM_CHANNEL, 1500);
+        bGateOpening = true; // To avoid processing further equal commands
     }
     else if(command == openCarGateCmd) {
         txBuffer[0] = openCarGateAck;
-        relayPulse(CAR_GATE_RELAY_TIM_CHANNEL, 1500);
+        if(!bCarGateOpening)
+            relayPulse(CAR_GATE_RELAY_TIM_CHANNEL, 1500);
+        bCarGateOpening = true; // To avoid processing further equal commands
     }
     rf24.writeAckPayload(sourcePipe, txBuffer, MAX_PAYLOAD_SIZE);
-    HAL_Delay(1);
+    HAL_Delay(1); // Is this needed ???
 }
 
 
@@ -1148,20 +1161,22 @@ HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim) {
         pin  = FREE1_RELAY_GPIO_PIN;
         channel = FREE1_RELAY_TIM_CHANNEL;
     }
+    if(__HAL_TIM_GET_IT_SOURCE(htim, TIM_FLAG_CC2) != RESET) {
+        port = GATE_RELAY_GPIO_PORT;
+        pin  = GATE_RELAY_GPIO_PIN;
+        channel = GATE_RELAY_TIM_CHANNEL;
+        bGateOpening = false;
+    }
 //    if(__HAL_TIM_GET_IT_SOURCE(htim, TIM_FLAG_CC3) != RESET) {
 //        port = FREE2_RELAY_GPIO_PORT;
 //        pin  = FREE2_RELAY_GPIO_PIN;
 //        channel = FREE2_RELAY_TIM_CHANNEL;
 //    }
-    if(__HAL_TIM_GET_IT_SOURCE(htim, TIM_FLAG_CC2) != RESET) {
-        port = GATE_RELAY_GPIO_PORT;
-        pin  = GATE_RELAY_GPIO_PIN;
-        channel = GATE_RELAY_TIM_CHANNEL;
-    }
     if(__HAL_TIM_GET_IT_SOURCE(htim, TIM_FLAG_CC4) != RESET) {
         port = CAR_GATE_RELAY_GPIO_PORT;
         pin  = CAR_GATE_RELAY_GPIO_PIN;
         channel = CAR_GATE_RELAY_TIM_CHANNEL;
+        bCarGateOpening = false;
     }
     HAL_GPIO_WritePin(port, pin, GPIO_PIN_SET);
     HAL_TIM_OC_Stop_IT(htim, channel);
