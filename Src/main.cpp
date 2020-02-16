@@ -32,10 +32,13 @@
 #define MAX_WAIT_ACK_TIME    500
 #define MAX_NO_SIGNAL_TIME   3000
 #define QUERY_INTERVAL       100
+//===============================================================
+
 
 // State Machine for the USBH_USR_ApplicationState
 #define USBH_USR_FS_INIT    ((uint8_t)0x00)
 #define USBH_USR_AUDIO      ((uint8_t)0x01)
+
 
 // Commands
 typedef enum {
@@ -118,20 +121,25 @@ uint8_t*  Audio_Buffer     = NULL;
 uint16_t* Audio_Out_Buffer = NULL;
 uint16_t* pdmDataIn        = NULL;
 uint16_t* pcmDataOut       = NULL;
-uint16_t  offset;
-uint32_t chunk2Write = 0;
+
+uint8_t chunk2Write = 0;
 
 bool     isBaseStation;
 uint8_t  Volume;
 
+
+// USB Disk and .wav File Variables
 char path[] = "0:/";
 FIL FileRead;
 DIR Directory;
-
 UINT bytesread;
 uint32_t WaveDataLength;
 __IO uint32_t AudioRemSize;
 WAVE_FormatTypeDef waveformat;
+FATFS USBDISKFatFs;          // File system object for USB disk logical drive
+char USBDISKPath[4];         // USB Host logical drive path
+MSC_ApplicationTypeDef AppliState = APPLICATION_IDLE;
+static uint8_t  USBH_USR_ApplicationState = USBH_USR_FS_INIT;
 
 
 __IO bool txOk;
@@ -158,19 +166,12 @@ __IO bool bCarGateOpening;
 __IO bool bBaseDisconnected;
 
 
-FATFS USBDISKFatFs;          // File system object for USB disk logical drive
-char USBDISKPath[4];         // USB Host logical drive path
-
-MSC_ApplicationTypeDef AppliState = APPLICATION_IDLE;
-static uint8_t  USBH_USR_ApplicationState = USBH_USR_FS_INIT;
-
-
 // HAL_NVIC_SystemReset();
 
 
 int
 main(void) {
-    const uint8_t Channel = 2;
+    const uint8_t radioChannel = 2;
     Volume = 70; // % of Max
 
     // System startup
@@ -206,7 +207,7 @@ main(void) {
         PushButton_Init(CAR_GATE_BUTTON_GPIO_PORT, CAR_GATE_BUTTON_GPIO_PIN, CAR_GATE_BUTTON_IRQ);
     }
 
-    if(!rf24.begin(Channel, RADIO_IN_IRQ_PREPRIO)) Error_Handler();
+    if(!rf24.begin(radioChannel, RADIO_IN_IRQ_PREPRIO)) Error_Handler();
     rf24.clearInterrupts();// Avoid false interrupts from Radio
     rf24.maskIRQ(false, false, false);
 
@@ -222,7 +223,7 @@ main(void) {
         }
     }
 
-}
+} // main(void)
 
 
 // The Base, once woken up by a button press,
@@ -366,23 +367,22 @@ connectRemote() {
 
 void
 processBase() {
-    uint8_t pipeNum;
     uint8_t base;
+    uint8_t offset;
+    uint8_t pipeNum;
     setRole(PRX); // Change role from PTX to PRX...
     rf24.flush_rx();
     rf24.setRetries(1, 0); // We have to be fast !!!
-    rf24.maskIRQ(false, false, false);
+
     adcInit();
     adcTIM2Init();
     // Enables ADC DMA requests and enables ADC peripheral
-    if(HAL_ADC_Start_DMA(&hAdc, (uint32_t*)adcDataIn, 2*MAX_PAYLOAD_SIZE) != HAL_OK) {
-        Error_Handler();
-    }
+    HAL_ADC_Start_DMA(&hAdc, (uint32_t*)adcDataIn, 2*MAX_PAYLOAD_SIZE);
     chunk2Write = 0;
     BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
     BSP_AUDIO_OUT_Play(Audio_Out_Buffer, 2*MAX_PAYLOAD_SIZE);
     // Enable ADC periodic sampling
-    if(HAL_TIM_Base_Start(&Tim2Handle) != HAL_OK) Error_Handler();
+    HAL_TIM_Base_Start(&Tim2Handle);
     BSP_LED_On(LED_GREEN);
 
     // Set the initial status....
@@ -460,6 +460,8 @@ processReceivedCommand(uint8_t command, uint8_t sourcePipe) {
 
 void
 processRemote() {
+    uint8_t base;
+    uint8_t offset;
     setRole(PTX); // Change role from PRX to PTX...
     rf24.flush_tx();
     rf24.setRetries(1, 0); // We have to be fast !!!
@@ -493,9 +495,9 @@ processRemote() {
             rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
             BSP_LED_Off(LED_BLUE); // Reading done
             // Write data in the current Audio Buffer chunk
-            offset = chunk2Write*MAX_PAYLOAD_SIZE;
+            base = chunk2Write*MAX_PAYLOAD_SIZE;
             for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
-                offset = (chunk2Write*MAX_PAYLOAD_SIZE+indx) << 1;
+                offset = (base+indx) << 1;
                 Audio_Out_Buffer[offset]   = rxBuffer[indx] << 8; // 1st Stereo Channel
                 Audio_Out_Buffer[offset+1] = rxBuffer[indx] << 8; // 2nd Stereo Channel
             }
@@ -532,6 +534,7 @@ processRemote() {
 
 void
 sendCommand(uint8_t command) {
+    uint8_t answer;
     BSP_AUDIO_IN_Stop(); // Ensure no other process can modify txBuffer
     rf24.openWritingPipe(pipes[2]);
     rf24.setRetries(5, 15);
@@ -556,7 +559,7 @@ sendCommand(uint8_t command) {
             BSP_LED_On(LED_ORANGE); // Signal the packet's start reading
             rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
             BSP_LED_Off(LED_ORANGE); // Reading done
-            uint8_t answer = *rxBuffer;
+            answer = *rxBuffer;
             if(answer == suspendAck) {
                 bBaseDisconnected = true;
                 bCommandDone = true;
