@@ -62,7 +62,8 @@ typedef enum {
 //===============================================================
 static void SystemClock_Config(void);
 static void configPinInit();
-static void PushButton_Init(GPIO_TypeDef* Port, uint32_t Pin, IRQn_Type Irq);
+static void configPinDeinit();
+static void pushButtonInit(GPIO_TypeDef* Port, uint32_t Pin, IRQn_Type Irq);
 static void relayGPIOInit(GPIO_TypeDef* Port, uint32_t Pin);
 static void initLeds();
 static void adcInit();
@@ -185,6 +186,8 @@ main(void) {
     // Are we Base or Remote ?
     configPinInit();
     isBaseStation = HAL_GPIO_ReadPin(CONFIGURE_PORT, CONFIGURE_PIN);
+    configPinDeinit(); // We don't need the pin anymore
+
     // Initialize the corresponding things..
     if(!isBaseStation) { // Prepare Wave file to Play
         if(!prepareFileSystem())
@@ -195,7 +198,7 @@ main(void) {
 
     // Init Push Buttons and Relays
     PHONE_BUTTON_CLK_ENABLE();
-    PushButton_Init(PHONE_BUTTON_GPIO_PORT, PHONE_BUTTON_GPIO_PIN, PHONE_BUTTON_IRQ);
+    pushButtonInit(PHONE_BUTTON_GPIO_PORT, PHONE_BUTTON_GPIO_PIN, PHONE_BUTTON_IRQ);
     if(isBaseStation) {
         relayTIM3Init();
         GATE_RELAY_GPIO_CLK_ENABLE();
@@ -205,9 +208,9 @@ main(void) {
     }
     else {
         GATE_BUTTON_CLK_ENABLE();
-        PushButton_Init(GATE_BUTTON_GPIO_PORT, GATE_BUTTON_GPIO_PIN, GATE_BUTTON_IRQ);
+        pushButtonInit(GATE_BUTTON_GPIO_PORT, GATE_BUTTON_GPIO_PIN, GATE_BUTTON_IRQ);
         CAR_GATE_BUTTON_CLK_ENABLE();
-        PushButton_Init(CAR_GATE_BUTTON_GPIO_PORT, CAR_GATE_BUTTON_GPIO_PIN, CAR_GATE_BUTTON_IRQ);
+        pushButtonInit(CAR_GATE_BUTTON_GPIO_PORT, CAR_GATE_BUTTON_GPIO_PIN, CAR_GATE_BUTTON_IRQ);
     }
 
     if(!rf24.begin(radioChannel, RADIO_IN_IRQ_PREPRIO)) Error_Handler();
@@ -251,7 +254,7 @@ connectBase() {
 
         // An external event has been detected: try to connect to a Remote !
         uint32_t t0 = HAL_GetTick()-QUERY_INTERVAL-1; // Just to send immediately the first request.
-        uint32_t startTimeout = HAL_GetTick();
+        startConnectTime = HAL_GetTick();
         do {
             if(HAL_GetTick()-t0 > QUERY_INTERVAL) {
                 t0 = HAL_GetTick();
@@ -271,21 +274,21 @@ connectBase() {
                     HAL_Delay(1);
                 }
             }
-            if(HAL_GetTick() < startTimeout) // counter overflow
-                startTimeout = HAL_GetTick();
-            bTimeoutElapsed = (HAL_GetTick()-startTimeout) > MAX_CONNECTION_TIME;
+            if(HAL_GetTick() < startConnectTime) // counter overflow
+                startConnectTime = HAL_GetTick();
+            bTimeoutElapsed = (HAL_GetTick()-startConnectTime) > MAX_CONNECTION_TIME;
         } while(!bBaseConnected && !bTimeoutElapsed);
 
-        ledsOff();
         if(!bBaseConnected) { // Connection timed out...
             txBuffer[0] = connectionTimedOut;
             BSP_LED_On(LED_BLUE);
             rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
             rf24.startWrite();
             BSP_LED_Off(LED_BLUE);
-            HAL_Delay(1);
+            HAL_Delay(10);
         }
     } while(!bBaseConnected);
+    ledsOff();
 
     // Connection with the Remote established...
     BSP_LED_Off(LED_RED);
@@ -781,7 +784,7 @@ ledsOff() {
 
 
 void
-PushButton_Init(GPIO_TypeDef* Port, uint32_t Pin, IRQn_Type Irq) {
+pushButtonInit(GPIO_TypeDef* Port, uint32_t Pin, IRQn_Type Irq) {
     GPIO_InitTypeDef GPIO_InitStruct;
 
     GPIO_InitStruct.Pin   = Pin;
@@ -1009,7 +1012,7 @@ EXTI15_10_IRQHandler(void) { // We received a radio interrupt...
 
     if(txOk) { // TX_DS IRQ asserted when the ACK packet has been received.
         BSP_LED_Off(LED_RED); // Reset previous errors signal
-        BSP_LED_On(LED_BLUE); // Signal a good transmission
+        //BSP_LED_On(LED_BLUE); // Signal a good transmission
     }
 
     if(txFailed) { // nRF24L01+ asserts the IRQ pin when MAX_RT is reached
@@ -1140,6 +1143,7 @@ HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
     if(GPIO_Pin == PHONE_BUTTON_GPIO_PIN) {
         if(isBaseStation) {
             bBaseSleeping = false;
+            startConnectTime = HAL_GetTick();
         }
         else {
             if(bConnectionRequested) {
@@ -1242,17 +1246,8 @@ configPinInit() {
 
 
 void
-NonFatalError_Handler(void) {// 2 sec of led blinking
-    uint32_t t0 = HAL_GetTick();
-    ledsOff();
-    while(HAL_GetTick()-t0 < 1000) {
-        HAL_Delay(100);
-        BSP_LED_Toggle(LED3);
-        BSP_LED_Toggle(LED4);
-        BSP_LED_Toggle(LED5);
-        BSP_LED_Toggle(LED6);
-    }
-    HAL_Delay(500);
+configPinDeinit() {
+    __HAL_RCC_GPIOC_CLK_DISABLE();
 }
 
 
