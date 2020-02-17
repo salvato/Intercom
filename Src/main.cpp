@@ -40,9 +40,9 @@
 
 //===============================================================
 #define MAX_CONNECTION_TIME  60000
-#define MAX_WAIT_ACK_TIME    500
-#define MAX_NO_SIGNAL_TIME   3000
-#define QUERY_INTERVAL       100
+#define MAX_WAIT_ACK_TIME    1000
+#define MAX_NO_SIGNAL_TIME   5000
+#define QUERY_INTERVAL       200
 //===============================================================
 
 
@@ -58,6 +58,8 @@ typedef enum {
     connectionTimedOut,
     suspendCmd,
     suspendAck,
+    checkConnectCmd,
+    checkConnectAck,
     openGateCmd,
     openGateAck,
     openCarGateCmd,
@@ -243,22 +245,42 @@ main(void) {
 void
 connectBase() {
     bool bTimeoutElapsed;
+    uint32_t t0;
     setRole(PTX);
     rf24.flush_tx();
     rf24.setRetries(5, 15);
 
+    BSP_LED_On(LED_GREEN);
     do {
-        BSP_LED_On(LED_RED);
         bBaseConnected = false;
-
         bBaseSleeping = true;
-        while(bBaseSleeping) {// We will be woken up only by a button press
+        t0 = HAL_GetTick();
+        while(bBaseSleeping) {
+            if(HAL_GetTick()-t0 > 1000) {
+                t0 = HAL_GetTick();
+                txBuffer[0] = checkConnectCmd;
+                BSP_LED_On(LED_BLUE);
+                rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+                rf24.startWrite();
+                BSP_LED_Off(LED_BLUE);
+            }
+            if(bRadioDataAvailable) {
+                bRadioDataAvailable = false;
+                BSP_LED_On(LED_ORANGE); // Signal the packet's start reading
+                rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
+                BSP_LED_Off(LED_ORANGE); // Reading done
+                if(rxBuffer[0] == checkConnectAck) {
+                    bBaseConnected = true;
+                    HAL_Delay(1);
+                }
+            }
         }
 
         // An external event has been detected: try to connect to a Remote !
-        uint32_t t0 = HAL_GetTick()-QUERY_INTERVAL-1; // Just to send immediately the first request.
+        t0 = HAL_GetTick()-QUERY_INTERVAL-1; // Just to send immediately the first request.
         startConnectTime = HAL_GetTick();
-        do {
+        bTimeoutElapsed = false;
+        while(!bBaseConnected && !bTimeoutElapsed) {
             if(HAL_GetTick()-t0 > QUERY_INTERVAL) {
                 t0 = HAL_GetTick();
                 txBuffer[0] = connectRequest;
@@ -280,7 +302,7 @@ connectBase() {
             if(HAL_GetTick() < startConnectTime) // counter overflow
                 startConnectTime = HAL_GetTick();
             bTimeoutElapsed = (HAL_GetTick()-startConnectTime) > MAX_CONNECTION_TIME;
-        } while(!bBaseConnected && !bTimeoutElapsed);
+        }
 
         if(!bBaseConnected) { // Connection timed out...
             txBuffer[0] = connectionTimedOut;
@@ -292,10 +314,8 @@ connectBase() {
         }
 
     } while(!bBaseConnected);
-    ledsOff();
 
-    // Connection with the Remote established...
-    BSP_LED_Off(LED_RED);
+    ledsOff(); // Connection with the Remote established...
 }
 
 
@@ -1038,15 +1058,12 @@ EXTI15_10_IRQHandler(void) { // We received a radio interrupt...
 
     if(txOk) { // TX_DS IRQ asserted when the ACK packet has been received.
         BSP_LED_Off(LED_RED); // Reset previous errors signal
-        //BSP_LED_On(LED_BLUE); // Signal a good transmission
     }
 
     if(txFailed) { // nRF24L01+ asserts the IRQ pin when MAX_RT is reached
                    // but the payload in TX FIFO is NOT removed!
         BSP_LED_On(LED_RED);
-        BSP_LED_Off(LED_ORANGE);
-        BSP_LED_Off(LED_BLUE);
-        rf24.flush_tx(); // There could be messeges not removed from the TX queue
+        rf24.flush_tx(); // Remove messages from the TX queue
     }
     bRadioIrq = true;
 }
