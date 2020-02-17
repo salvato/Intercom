@@ -75,7 +75,6 @@ void OTG_FS_IRQHandler(void);
 void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim);
 void TIM3_IRQHandler(void);
 void TIM7_IRQHandler(void);
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim);
 
 void _delay_3t(uint32_t cycles);
 void delay_cycles(const int64_t cycles);

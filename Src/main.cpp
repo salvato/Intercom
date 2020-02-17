@@ -1,4 +1,4 @@
-#include "main.h"
+﻿#include "main.h"
 #include "RF24.h"
 #include "printf.h"
 #include "string.h"
@@ -10,7 +10,15 @@
 
 
 //====================================================================
+//
 // The STM32F4Discovery board can supply ~100mA @ 3.3V and ~100mA @ 5V
+//
+// Timers on APB1 bus are architecturally limited to 84 MHz,
+// as the bus is slower nominally 36-42 MHz across STM32 families.
+//
+// The APB2 bus is faster (84 MHz), and should permit a 168 MHz time-base.
+// Refer to the clock tree diagram in the reference manual.
+//
 //====================================================================
 
 
@@ -79,6 +87,7 @@ static void processReceivedCommand(uint8_t command, uint8_t sourcePipe);
 static void sendCommand(uint8_t command);
 static void USBH_UserProcess (USBH_HandleTypeDef *pHost, uint8_t vId);
 static bool prepareFileSystem();
+static bool closeFileSystem();
 static void startAlarm();
 static bool updateAlarm();
 static void stopAlarm();
@@ -153,7 +162,6 @@ __IO bool bRadioIrq;
 __IO bool bReady2Send;
 __IO bool bReady2Play;
 __IO bool bBaseSleeping;
-__IO bool bTimeoutElapsed;
 __IO bool bConnectionRequested;
 __IO bool bConnectionAccepted;
      bool bConnectionTimedOut;
@@ -189,11 +197,11 @@ main(void) {
     configPinDeinit(); // We don't need the pin anymore
 
     // Initialize the corresponding things..
-    if(!isBaseStation) { // Prepare Wave file to Play
-        if(!prepareFileSystem())
-            // Here we should provide an alternative way to produce the Alarm Sound !
-            Error_Handler();
-    }
+//    if(!isBaseStation) { // Prepare Wave file to Play
+//        if(!prepareFileSystem())
+//            // Here we should provide an alternative way to produce the Alarm Sound !
+//            Error_Handler();
+//    }
     initBuffers(isBaseStation);
 
     // Init Push Buttons and Relays
@@ -240,6 +248,7 @@ main(void) {
 // when it gives up and returns sleeping.
 void
 connectBase() {
+    bool bTimeoutElapsed;
     setRole(PTX);
     rf24.flush_tx();
     rf24.setRetries(5, 15);
@@ -308,6 +317,7 @@ connectRemote() {
     rf24.setRetries(5, 15);
 
     bool bRemoteConnected = false;
+    bool bTimeoutElapsed;
     while(!bRemoteConnected) {
         bConnectionAccepted  = false;
         bConnectionRequested = false;
@@ -322,6 +332,8 @@ connectRemote() {
 
         if(rxBuffer[0] == connectRequest) { // Connection Request received...
             bConnectionRequested = true;
+            if(!prepareFileSystem())
+                Error_Handler();// Here we should provide an alternative way to produce the Alarm Sound !
             startAlarm();
             while(!bConnectionAccepted && !bConnectionTimedOut) {
                 if(!updateAlarm()) {
@@ -376,6 +388,7 @@ processBase() {
     uint8_t base;
     uint8_t offset;
     uint8_t pipeNum;
+    bool bTimeoutElapsed;
     setRole(PRX); // Change role from PTX to PRX...
     rf24.flush_rx();
     rf24.setRetries(1, 0); // We have to be fast !!!
@@ -486,6 +499,7 @@ processRemote() {
     bReady2Send       = false;
     bRadioIrq         = true; // To force sending as soon as we have data
     uint32_t startTimeout = HAL_GetTick();
+    bool bTimeoutElapsed;
     do {
         if(bReady2Send && bRadioIrq) { // We will send data only when available and
             bReady2Send = false;       // the previous data were sent or lost !
@@ -649,6 +663,7 @@ stopAlarm() {
     BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW);
     free(Audio_Buffer);
     f_close(&FileRead);
+    closeFileSystem();
 }
 
 
@@ -752,6 +767,7 @@ USBH_UserProcess (USBH_HandleTypeDef *pHost, uint8_t vId) {
 
 bool
 prepareFileSystem() {
+    AppliState = APPLICATION_IDLE;
     // Link the USB Host disk I/O
     if(FATFS_LinkDriver(&USBH_Driver, USBDISKPath) != 0) return false;
     if(USBH_Init(&hUSB_Host, USBH_UserProcess, 0) != USBH_OK) return false;
@@ -760,16 +776,31 @@ prepareFileSystem() {
 
     USBH_USR_ApplicationState = USBH_USR_FS_INIT;
     uint32_t startTime = HAL_GetTick();
+    bool bTimeoutElapsed = false;
     while(AppliState != APPLICATION_START && !bTimeoutElapsed) {
         USBH_Process(&hUSB_Host); // USBH_Background Process
+        bTimeoutElapsed = (HAL_GetTick()-startTime > 5000);
     }
-    if(HAL_GetTick()-startTime > 5000) // USB Disk not responding...
+    if(bTimeoutElapsed) // USB Disk not responding...
         Error_Handler();
 
     // Initializes (mount) the File System
     if(f_mount(&USBDISKFatFs, (TCHAR const*)USBDISKPath, 0 ) != FR_OK ) return false;
     if(f_opendir(&Directory, path) != FR_OK) return false;
     USBH_USR_ApplicationState = USBH_USR_AUDIO;
+    return true;
+}
+
+
+bool
+closeFileSystem() {
+    if(f_closedir(&Directory) != FR_OK) Error_Handler();
+    if(f_mount(NULL, (TCHAR const*)"", 0) != FR_OK) Error_Handler();
+    if(USBH_Stop(&hUSB_Host) != USBH_OK) Error_Handler();
+    HAL_Delay(200);
+    if(USBH_DeInit(&hUSB_Host) != USBH_OK) Error_Handler();
+    if(FATFS_UnLinkDriverEx(USBDISKPath, 0)) Error_Handler();
+    AppliState = APPLICATION_IDLE;
     return true;
 }
 
@@ -1213,13 +1244,6 @@ HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim) {
 void
 TIM3_IRQHandler(void) {
     HAL_TIM_IRQHandler(&Tim3Handle);
-}
-
-
-void
-HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
-    bTimeoutElapsed = true;
-    HAL_TIM_Base_Stop(htim);
 }
 
 
