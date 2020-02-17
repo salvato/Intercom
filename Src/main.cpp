@@ -197,11 +197,6 @@ main(void) {
     configPinDeinit(); // We don't need the pin anymore
 
     // Initialize the corresponding things..
-//    if(!isBaseStation) { // Prepare Wave file to Play
-//        if(!prepareFileSystem())
-//            // Here we should provide an alternative way to produce the Alarm Sound !
-//            Error_Handler();
-//    }
     initBuffers(isBaseStation);
 
     // Init Push Buttons and Relays
