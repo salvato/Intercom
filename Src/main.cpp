@@ -166,6 +166,8 @@ __IO bool bReady2Play;
 __IO bool bBaseSleeping;
 __IO bool bConnectionRequested;
 __IO bool bConnectionAccepted;
+__IO bool bConnectionWanted;
+__IO bool bBaseDisconnected;
      bool bConnectionTimedOut;
      bool bBaseConnected;
 __IO bool bSuspend;      // true if the Remote ask to suspend the connection
@@ -177,7 +179,6 @@ __IO bool bSendOpenGate;
 __IO bool bGateOpening;
 __IO bool bSendOpenCarGate;
 __IO bool bCarGateOpening;
-__IO bool bBaseDisconnected;
 
 
 // HAL_NVIC_SystemReset();
@@ -337,6 +338,7 @@ connectRemote() {
         bConnectionAccepted  = false;
         bConnectionRequested = false;
         bConnectionTimedOut  = false;
+        bConnectionWanted    = false;
         BSP_LED_On(LED_RED);
         while(!bRadioDataAvailable) {
         }
@@ -344,6 +346,16 @@ connectRemote() {
         BSP_LED_On(LED_BLUE);
         rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
         BSP_LED_Off(LED_BLUE);
+
+        if(rxBuffer[0] == checkConnectCmd && bConnectionWanted) {
+            txBuffer[0] = connectionAccepted;
+            BSP_LED_On(LED_ORANGE);
+            rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
+            BSP_LED_Off(LED_ORANGE);
+            bRemoteConnected = true;
+            HAL_Delay(150); // Give time to send the Ack and to
+                            // convert the Base into PRX mode
+        }
 
         if(rxBuffer[0] == connectRequest) { // Connection Request received...
             bConnectionRequested = true;
@@ -1193,8 +1205,11 @@ HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
                 bConnectionRequested = false;
                 bConnectionAccepted = true;
             }
-            else {
+            else if(bConnectionAccepted) {
                 bSuspend = true;
+            }
+            else {
+                bConnectionWanted = true;
             }
         }
     }
