@@ -188,14 +188,13 @@ main(void) {
 
     // System startup
     HAL_Init();
-    initLeds();
     SystemClock_Config();
 
+    initLeds();
     // Are we Base or Remote ?
     configPinInit();
     isBaseStation = HAL_GPIO_ReadPin(CONFIGURE_PORT, CONFIGURE_PIN);
     configPinDeinit(); // We don't need the pin anymore
-
     // Initialize the corresponding things..
     initBuffers(isBaseStation);
 
@@ -291,6 +290,7 @@ connectBase() {
             BSP_LED_Off(LED_BLUE);
             HAL_Delay(10);
         }
+
     } while(!bBaseConnected);
     ledsOff();
 
@@ -789,12 +789,12 @@ prepareFileSystem() {
 
 bool
 closeFileSystem() {
-    if(f_closedir(&Directory) != FR_OK) Error_Handler();
-    if(f_mount(NULL, (TCHAR const*)"", 0) != FR_OK) Error_Handler();
-    if(USBH_Stop(&hUSB_Host) != USBH_OK) Error_Handler();
+    f_closedir(&Directory);
+    f_mount(NULL, (TCHAR const*)"", 0);
+    USBH_Stop(&hUSB_Host);
     HAL_Delay(200);
-    if(USBH_DeInit(&hUSB_Host) != USBH_OK) Error_Handler();
-    if(FATFS_UnLinkDriverEx(USBDISKPath, 0)) Error_Handler();
+    USBH_DeInit(&hUSB_Host);
+    FATFS_UnLinkDriverEx(USBDISKPath, 0);
     AppliState = APPLICATION_IDLE;
     return true;
 }
