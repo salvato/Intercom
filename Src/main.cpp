@@ -346,7 +346,7 @@ connectRemote() {
             rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
             BSP_LED_Off(LED_ORANGE);
             bRemoteConnected = true;
-            HAL_Delay(750); // Give time to send the Ack and to
+            HAL_Delay(150); // Give time to send the Ack and to
                             // convert the Base into PRX mode
         }
 
