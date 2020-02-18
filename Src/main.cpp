@@ -36,6 +36,7 @@
   #define PUSH_BTN_IRQ_PREPRIO            0x0F
   #define ADC_DMA_IRQ_PREPRIO             0x02
   #define RELAY_PULSE_IRQ_PREPRIO         0x0F
+//===============================================================
 
 
 //===============================================================
@@ -46,12 +47,17 @@
 //===============================================================
 
 
+//===============================================================
 // State Machine for the USBH_USR_ApplicationState
+//===============================================================
 #define USBH_USR_FS_INIT    ((uint8_t)0x00)
 #define USBH_USR_AUDIO      ((uint8_t)0x01)
+//===============================================================
 
 
+//===============================================================
 // Commands
+//===============================================================
 typedef enum {
     connectRequest      = 0x10,
     connectionAccepted,
@@ -65,6 +71,7 @@ typedef enum {
     openCarGateCmd,
     openCarGateAck
 } Commands;
+//===============================================================
 
 
 //===============================================================
@@ -95,6 +102,7 @@ static bool updateAlarm();
 static void stopAlarm();
 static void relayTIM3Init();
 static void relayPulse(uint32_t relayChannel, uint16_t msPulse);
+//===============================================================
 
 
 TIM_HandleTypeDef  Tim2Handle;
@@ -143,7 +151,9 @@ bool     isBaseStation;
 uint8_t  Volume;
 
 
+//===============================================================
 // USB Disk and .wav File Variables
+//===============================================================
 char path[] = "0:/";
 FIL FileRead;
 DIR Directory;
@@ -155,6 +165,7 @@ FATFS USBDISKFatFs;          // File system object for USB disk logical drive
 char USBDISKPath[4];         // USB Host logical drive path
 MSC_ApplicationTypeDef AppliState = APPLICATION_IDLE;
 static uint8_t  USBH_USR_ApplicationState = USBH_USR_FS_INIT;
+//===============================================================
 
 
 __IO bool txOk;
@@ -252,7 +263,7 @@ connectBase() {
         bBaseSleeping = true;
         t0 = HAL_GetTick();
         while(bBaseSleeping) {
-            if(HAL_GetTick()-t0 > 1000) { // Is the Remote asking for conection ?
+            if(HAL_GetTick()-t0 > QUERY_INTERVAL) { // Is the Remote asking for conection ?
                 t0 = HAL_GetTick();
                 txBuffer[0] = checkConnectCmd;
                 BSP_LED_On(LED_BLUE);
@@ -268,7 +279,6 @@ connectBase() {
                 if(rxBuffer[0] == checkConnectAck) { // If true Remote is asking for connection
                     bBaseSleeping = false;
                     bBaseConnected = true;
-                    HAL_Delay(1);
                 }
             }
         } // while(bBaseSleeping)
@@ -344,16 +354,15 @@ connectRemote() {
             txBuffer[0] = checkConnectAck;
             BSP_LED_On(LED_ORANGE);
             rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
-            BSP_LED_Off(LED_ORANGE);
             bRemoteConnected = true;
-            HAL_Delay(150); // Give time to send the Ack and to
-                            // convert the Base into PRX mode
+            bConnectionAccepted = true;
+            HAL_Delay(QUERY_INTERVAL+1); // Give time to  the Base of receiving
+                                         // the Ack and to convert into PRX mode
+            BSP_LED_Off(LED_ORANGE);
         }
 
         if(rxBuffer[0] == connectRequest) { // Connection Request received...
             bConnectionRequested = true;
-            if(!prepareFileSystem())
-                Error_Handler();// Here we should provide an alternative way to produce the Alarm Sound !
             startAlarm();
             while(!bConnectionAccepted && !bConnectionTimedOut) {
                 if(!updateAlarm()) {
@@ -423,7 +432,6 @@ processBase() {
     BSP_AUDIO_OUT_Play(Audio_Out_Buffer, 2*MAX_PAYLOAD_SIZE);
     // Enable ADC periodic sampling
     HAL_TIM_Base_Start(&Tim2Handle);
-    BSP_LED_On(LED_GREEN);
 
     // Set the initial status....
     bSuspend = false;
@@ -438,7 +446,9 @@ processBase() {
             bRadioDataAvailable = false;
             startTimeout = HAL_GetTick();
             rf24.available(&pipeNum);
+            BSP_LED_On(LED_ORANGE);
             rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
+            BSP_LED_Off(LED_ORANGE);
             if(pipeNum == 1) { // The packet contains Audio Data:
                 BSP_LED_On(LED_BLUE); // Signal the packet's start reading
                 // At first replay with our audio data...
@@ -503,16 +513,15 @@ processRemote() {
         if(bReady2Send && bRadioIrq) { // We will send data only when available and
             bReady2Send = false;       // the previous data were sent or lost !
             bRadioIrq = false;
-            BSP_LED_Off(LED_ORANGE);
-            BSP_LED_Off(LED_BLUE);
-            BSP_LED_On(LED_GREEN); // Signal the start of sending the
+            BSP_LED_On(LED_BLUE);
+            rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
             rf24.startWrite();     // buffer prepared by the Microphone
+            BSP_LED_Off(LED_BLUE); // Reading done
         }
         if(bRadioDataAvailable) { // It's an Acknowledge Packet containing Audio
             bRadioDataAvailable = false;
-            BSP_LED_On(LED_BLUE); // Signal the packet's start reading
+            BSP_LED_On(LED_ORANGE); // Signal the packet's start reading
             rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
-            BSP_LED_Off(LED_BLUE); // Reading done
             // Write data in the current Audio Buffer chunk
             base = chunk2Write*MAX_PAYLOAD_SIZE;
             for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
@@ -521,6 +530,7 @@ processRemote() {
                 Audio_Out_Buffer[offset+1] = rxBuffer[indx] << 8; // 2nd Stereo Channel
             }
             startTimeout = HAL_GetTick();
+            BSP_LED_Off(LED_ORANGE); // Reading done
             // We have done with the new data...
         } // if(bRadioDataAvailable)
 
@@ -630,12 +640,13 @@ sendCommand(uint8_t command) {
 
 void
 startAlarm() {
+    if(!prepareFileSystem())
+        Error_Handler();
     buffer_offset = BUFFER_OFFSET_NONE;
     bytesread = 0;
     WaveDataLength = 0;
     AudioRemSize = 0;
     if(f_open(&FileRead, WAVE_NAME , FA_READ) != FR_OK) {
-        // Here we should provide an alternative way to produce the Alarm Sound
         Error_Handler();
     }
     // Read the wav file header
@@ -1140,12 +1151,13 @@ BSP_AUDIO_OUT_Error_CallBack(void) {
 
 void
 BSP_AUDIO_IN_TransferComplete_CallBack(void) {
+    BSP_LED_On(LED_GREEN);
     BSP_AUDIO_IN_PDMToPCM(&pdmDataIn[INTERNAL_BUFF_SIZE/2], pcmDataOut);
     for(uint16_t i=0; i<PCM_OUT_SIZE; i++) {
         txBuffer[i+PCM_OUT_SIZE] = (pcmDataOut[i<<1] >> 8) & 0xFF;
     }
-    rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
     bReady2Send = true;
+    BSP_LED_Off(LED_GREEN);
 }
 
 
