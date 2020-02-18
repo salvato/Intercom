@@ -74,7 +74,6 @@ HAL/stm32f4xx_hal_tim_ex.c
 Inc/RF24.h
 Inc/RF24_config.h
 Inc/SPI.h
-Inc/accelero.h
 Inc/audio.h
 Inc/cmsis_compiler.h
 Inc/cmsis_gcc.h
@@ -83,8 +82,6 @@ Inc/config.h
 Inc/core_cm4.h
 Inc/cs43l22.h
 Inc/ffconf.h
-Inc/lis302dl.h
-Inc/lis3dsh.h
 Inc/main.h
 Inc/mpu_armv7.h
 Inc/nRF24L01.h
@@ -165,8 +162,6 @@ STM32_USB_Host_Library/Release_Notes.html
 Src/RF24.cpp
 Src/SPI.cpp
 Src/cs43l22.c
-Src/lis302dl.c
-Src/lis3dsh.c
 Src/main.cpp
 Src/stm32f4_discovery.c
 Src/stm32f4_discovery_audio.c

@@ -28,8 +28,6 @@ Src/stm32f4xx_it.c \
 Src/system_stm32f4xx.c \
 Src/stm32f4_discovery.c \
 Src/cs43l22.c \
-Src/lis302dl.c \
-Src/lis3dsh.c \
 Src/stm32f4_discovery_audio.c \
 Src/usbh_conf.c \
 Src/usbh_diskio_dma.c \
