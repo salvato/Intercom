@@ -194,12 +194,10 @@ main(void) {
     SystemClock_Config();
 
     initLeds();
-    // Are we Base or Remote ?
-    configPinInit();
+    configPinInit(); // Are we Base or Remote ?
     isBaseStation = HAL_GPIO_ReadPin(CONFIGURE_PORT, CONFIGURE_PIN);
     configPinDeinit(); // We don't need the pin anymore
-    // Initialize the corresponding things..
-    initBuffers(isBaseStation);
+    initBuffers(isBaseStation); // Initialize the needed memory buffers
 
     // Init Push Buttons and Relays
     PHONE_BUTTON_CLK_ENABLE();
@@ -218,11 +216,12 @@ main(void) {
         pushButtonInit(CAR_GATE_BUTTON_GPIO_PORT, CAR_GATE_BUTTON_GPIO_PIN, CAR_GATE_BUTTON_IRQ);
     }
 
+    // Init the Radio
     if(!rf24.begin(radioChannel, RADIO_IN_IRQ_PREPRIO)) Error_Handler();
     rf24.clearInterrupts();// Avoid false interrupts from Radio
     rf24.maskIRQ(false, false, false);
 
-    // The Endless loop...
+    // Ready for the endless loop...
     while(true) {
         if(isBaseStation) {
             connectBase(); // Base will be woken up by a button press
@@ -237,19 +236,15 @@ main(void) {
 } // main(void)
 
 
-// The Base, once woken up by a button press,
-// send a "Connection Request" to the Remote and waits for
-// a "Connection Accepted" message within a given time.
-// If the "Connection Accepted" is received the Base assumes that
-// a Remote is ready to talk otherwise the Base send a message
-// when it gives up and returns sleeping.
 void
 connectBase() {
     bool bTimeoutElapsed;
     uint32_t t0;
     setRole(PTX);
-    rf24.flush_tx();
     rf24.setRetries(5, 15);
+    rf24.flush_tx();
+    rf24.flush_rx();
+    bRadioDataAvailable = false;
 
     BSP_LED_On(LED_GREEN);
     do {
@@ -257,7 +252,7 @@ connectBase() {
         bBaseSleeping = true;
         t0 = HAL_GetTick();
         while(bBaseSleeping) {
-            if(HAL_GetTick()-t0 > 1000) {
+            if(HAL_GetTick()-t0 > 1000) { // Is the Remote asking for conection ?
                 t0 = HAL_GetTick();
                 txBuffer[0] = checkConnectCmd;
                 BSP_LED_On(LED_BLUE);
@@ -267,17 +262,18 @@ connectBase() {
             }
             if(bRadioDataAvailable) {
                 bRadioDataAvailable = false;
-                BSP_LED_On(LED_ORANGE); // Signal the packet's start reading
+                BSP_LED_On(LED_ORANGE);
                 rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
-                BSP_LED_Off(LED_ORANGE); // Reading done
-                if(rxBuffer[0] == checkConnectAck) {
+                BSP_LED_Off(LED_ORANGE);
+                if(rxBuffer[0] == checkConnectAck) { // If true Remote is asking for connection
+                    bBaseSleeping = false;
                     bBaseConnected = true;
                     HAL_Delay(1);
                 }
             }
-        }
+        } // while(bBaseSleeping)
 
-        // An external event has been detected: try to connect to a Remote !
+        // An awake event has been detected
         t0 = HAL_GetTick()-QUERY_INTERVAL-1; // Just to send immediately the first request.
         startConnectTime = HAL_GetTick();
         bTimeoutElapsed = false;
@@ -306,6 +302,7 @@ connectBase() {
         }
 
         if(!bBaseConnected) { // Connection timed out...
+            // Probaly we should set the NOACK to avoid loosing the ACK message
             txBuffer[0] = connectionTimedOut;
             BSP_LED_On(LED_BLUE);
             rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
@@ -320,26 +317,22 @@ connectBase() {
 }
 
 
-// The Remote stay receiving data until a "Connection Request" arrives from the Base.
-// It then start playing an Alarm Sound and wait for the user to pick up the phone.
-// If the user does not interact within a given time the Remote stops the sound
-// ad returns waiting a new call.
-// If the user interact within the given time it send a "Connection Accepted" message
-// and assumes to be connected with the Base.
 void
 connectRemote() {
     setRole(PRX);
-    rf24.flush_rx();
     rf24.setRetries(5, 15);
+    rf24.flush_tx();
+    rf24.flush_rx();
+    bRadioDataAvailable  = false;
 
     bool bRemoteConnected = false;
     bool bTimeoutElapsed;
+    BSP_LED_On(LED_GREEN);
     while(!bRemoteConnected) {
         bConnectionAccepted  = false;
         bConnectionRequested = false;
         bConnectionTimedOut  = false;
         bConnectionWanted    = false;
-        BSP_LED_On(LED_RED);
         while(!bRadioDataAvailable) {
         }
         bRadioDataAvailable  = false;
@@ -348,12 +341,12 @@ connectRemote() {
         BSP_LED_Off(LED_BLUE);
 
         if(rxBuffer[0] == checkConnectCmd && bConnectionWanted) {
-            txBuffer[0] = connectionAccepted;
+            txBuffer[0] = checkConnectAck;
             BSP_LED_On(LED_ORANGE);
             rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
             BSP_LED_Off(LED_ORANGE);
             bRemoteConnected = true;
-            HAL_Delay(150); // Give time to send the Ack and to
+            HAL_Delay(750); // Give time to send the Ack and to
                             // convert the Base into PRX mode
         }
 
@@ -406,7 +399,7 @@ connectRemote() {
     } // while(!bRemoteConnected)
 
     // Connection with the Base established...
-    BSP_LED_Off(LED_RED);
+    BSP_LED_Off(LED_GREEN);
 }
 
 
