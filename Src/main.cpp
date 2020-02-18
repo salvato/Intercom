@@ -340,7 +340,7 @@ connectRemote() {
         rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
         BSP_LED_Off(LED_BLUE);
 
-        if(rxBuffer[0] == checkConnectCmd && bConnectionWanted) {
+        if((rxBuffer[0] == checkConnectCmd) && bConnectionWanted) {
             txBuffer[0] = checkConnectAck;
             BSP_LED_On(LED_ORANGE);
             rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
