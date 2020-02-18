@@ -410,8 +410,9 @@ processBase() {
     uint8_t pipeNum;
     bool bTimeoutElapsed;
     setRole(PRX); // Change role from PTX to PRX...
-    rf24.flush_rx();
     rf24.setRetries(1, 0); // We have to be fast !!!
+    rf24.flush_rx();
+    rf24.flush_tx();
 
     adcInit();
     adcTIM2Init();
@@ -429,8 +430,8 @@ processBase() {
     bGateOpening = false;
     bCarGateOpening = false;
     bRadioDataAvailable = false;
-    uint32_t startTimeout = HAL_GetTick();
 
+    uint32_t startTimeout = HAL_GetTick();
     do { // Loop until disconnected or contact lost...
 
         if(bRadioDataAvailable) {
@@ -475,35 +476,13 @@ processBase() {
 
 
 void
-processReceivedCommand(uint8_t command, uint8_t sourcePipe) {
-    if(command == suspendCmd) {
-        txBuffer[0] = suspendAck;
-        bSuspend = true;
-    }
-    else if(command == openGateCmd) {
-        txBuffer[0] = openGateAck;
-        if(!bGateOpening)
-            relayPulse(GATE_RELAY_TIM_CHANNEL, 1500);
-        bGateOpening = true; // To avoid processing further equal commands
-    }
-    else if(command == openCarGateCmd) {
-        txBuffer[0] = openCarGateAck;
-        if(!bCarGateOpening)
-            relayPulse(CAR_GATE_RELAY_TIM_CHANNEL, 1500);
-        bCarGateOpening = true; // To avoid processing further equal commands
-    }
-    rf24.writeAckPayload(sourcePipe, txBuffer, MAX_PAYLOAD_SIZE);
-    HAL_Delay(1); // Is this needed ???
-}
-
-
-void
 processRemote() {
     uint8_t base;
     uint8_t offset;
     setRole(PTX); // Change role from PRX to PTX...
-    rf24.flush_tx();
     rf24.setRetries(1, 0); // We have to be fast !!!
+    rf24.flush_tx();
+    rf24.flush_rx();
 
     BSP_AUDIO_IN_Init(DEFAULT_AUDIO_IN_FREQ, DEFAULT_AUDIO_IN_BIT_RESOLUTION, DEFAULT_AUDIO_IN_CHANNEL_NBR);
     BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
@@ -518,8 +497,8 @@ processRemote() {
     bSendOpenCarGate  = false;
     bReady2Send       = false;
     bRadioIrq         = true; // To force sending as soon as we have data
-    uint32_t startTimeout = HAL_GetTick();
     bool bTimeoutElapsed;
+    uint32_t startTimeout = HAL_GetTick();
     do {
         if(bReady2Send && bRadioIrq) { // We will send data only when available and
             bReady2Send = false;       // the previous data were sent or lost !
@@ -569,6 +548,29 @@ processRemote() {
     BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio and switch off the codec
     ledsOff();
     HAL_Delay(150);
+}
+
+
+void
+processReceivedCommand(uint8_t command, uint8_t sourcePipe) {
+    if(command == suspendCmd) {
+        txBuffer[0] = suspendAck;
+        bSuspend = true;
+    }
+    else if(command == openGateCmd) {
+        txBuffer[0] = openGateAck;
+        if(!bGateOpening)
+            relayPulse(GATE_RELAY_TIM_CHANNEL, 1500);
+        bGateOpening = true; // To avoid processing further equal commands
+    }
+    else if(command == openCarGateCmd) {
+        txBuffer[0] = openCarGateAck;
+        if(!bCarGateOpening)
+            relayPulse(CAR_GATE_RELAY_TIM_CHANNEL, 1500);
+        bCarGateOpening = true; // To avoid processing further equal commands
+    }
+    rf24.writeAckPayload(sourcePipe, txBuffer, MAX_PAYLOAD_SIZE);
+    HAL_Delay(1); // Is this needed ???
 }
 
 
