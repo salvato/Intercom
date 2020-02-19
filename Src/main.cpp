@@ -361,21 +361,25 @@ connectRemote() {
                 txBuffer[0] = checkConnectAck;
                 bRemoteConnected = true;
                 bConnectionAccepted = true;
+                BSP_LED_On(LED_ORANGE);
+                rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
+                BSP_LED_Off(LED_ORANGE);
+                HAL_Delay(QUERY_INTERVAL+1); // Give time to  the Base of receiving
+                                             // the Ack and to convert into PRX mode
             }
             if(bSendOpenGate) {
                 txBuffer[0] = openGateAck;
                 bSendOpenGate    = false;
+                BSP_LED_On(LED_ORANGE);
+                rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
+                BSP_LED_Off(LED_ORANGE);
             }
             if(bSendOpenCarGate) {
                 txBuffer[0] = openCarGateAck;
                 bSendOpenCarGate = false;
-            }
-            BSP_LED_On(LED_ORANGE);
-            rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
-            BSP_LED_Off(LED_ORANGE);
-            if(bConnectionAccepted) {
-                HAL_Delay(QUERY_INTERVAL+1); // Give time to  the Base of receiving
-                                             // the Ack and to convert into PRX mode
+                BSP_LED_On(LED_ORANGE);
+                rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
+                BSP_LED_Off(LED_ORANGE);
             }
         }
 
