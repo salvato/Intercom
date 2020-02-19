@@ -19,6 +19,7 @@
 // The APB2 bus is faster (84 MHz), and should permit a 168 MHz time-base.
 // Refer to the clock tree diagram in the reference manual.
 //
+// MSP (MCU Support Package)
 //====================================================================
 
 
@@ -77,6 +78,7 @@ typedef enum {
 //===============================================================
 // Local Functions
 //===============================================================
+static bool initSystem();
 static void SystemClock_Config(void);
 static void configPinInit();
 static void configPinDeinit();
@@ -145,10 +147,11 @@ uint16_t* Audio_Out_Buffer = NULL;
 uint16_t* pdmDataIn        = NULL;
 uint16_t* pcmDataOut       = NULL;
 
-uint8_t chunk2Write = 0;
 
-bool     isBaseStation;
-uint8_t  Volume;
+
+uint8_t       Volume       = 70; //% of Max
+uint8_t       chunk2Write  = 0;
+const uint8_t radioChannel = 2;
 
 
 //===============================================================
@@ -190,6 +193,7 @@ __IO bool bSendOpenGate;
 __IO bool bGateOpening;
 __IO bool bSendOpenCarGate;
 __IO bool bCarGateOpening;
+     bool isBaseStation;
 
 
 // HAL_NVIC_SystemReset();
@@ -197,9 +201,25 @@ __IO bool bCarGateOpening;
 
 int
 main(void) {
-    const uint8_t radioChannel = 2;
-    Volume = 70; // % of Max
+    if(!initSystem())
+        Error_Handler();
+    // Ready for the endless loop...
+    while(true) {
+        if(isBaseStation) {
+            connectBase(); // Base will be woken up by a button press
+            processBase();
+        }
+        else {
+            connectRemote(); // Remote will be woken up by receiving a command from Base
+            processRemote();
+        }
+    }
 
+}
+
+
+bool
+initSystem() {
     // System startup
     HAL_Init();
     SystemClock_Config();
@@ -228,23 +248,11 @@ main(void) {
     }
 
     // Init the Radio
-    if(!rf24.begin(radioChannel, RADIO_IN_IRQ_PREPRIO)) Error_Handler();
+    if(!rf24.begin(radioChannel, RADIO_IN_IRQ_PREPRIO)) return false;
     rf24.clearInterrupts();// Avoid false interrupts from Radio
     rf24.maskIRQ(false, false, false);
-
-    // Ready for the endless loop...
-    while(true) {
-        if(isBaseStation) {
-            connectBase(); // Base will be woken up by a button press
-            processBase();
-        }
-        else {
-            connectRemote(); // Remote will be woken up by receiving a command from Base
-            processRemote();
-        }
-    }
-
-} // main(void)
+    return true;
+}
 
 
 void
@@ -255,15 +263,15 @@ connectBase() {
     rf24.setRetries(5, 15);
     rf24.flush_tx();
     rf24.flush_rx();
-    bRadioDataAvailable = false;
 
     BSP_LED_On(LED_GREEN);
+    bRadioDataAvailable = false;
     do {
         bBaseConnected = false;
-        bBaseSleeping = true;
-        t0 = HAL_GetTick();
+        bBaseSleeping  = true;
+        t0 = HAL_GetTick()-QUERY_INTERVAL-1;
         while(bBaseSleeping) {
-            if(HAL_GetTick()-t0 > QUERY_INTERVAL) { // Is the Remote asking for conection ?
+            if(HAL_GetTick()-t0 > QUERY_INTERVAL) {
                 t0 = HAL_GetTick();
                 txBuffer[0] = checkBaseRequestCmd;
                 BSP_LED_On(LED_BLUE);
@@ -276,8 +284,8 @@ connectBase() {
                 BSP_LED_On(LED_ORANGE);
                 rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
                 BSP_LED_Off(LED_ORANGE);
-                if(rxBuffer[0] == wantConnectAck) { // If true Remote is asking for connection
-                    bBaseSleeping = false;
+                if(rxBuffer[0] == wantConnectAck) {
+                    bBaseSleeping  = false;
                     bBaseConnected = true;
                 }
                 if(rxBuffer[0] == openGateAck) {
@@ -290,7 +298,7 @@ connectBase() {
         } // while(bBaseSleeping)
 
         // An awake event has been detected
-        t0 = HAL_GetTick()-QUERY_INTERVAL-1; // Just to send immediately the first request.
+        t0 = HAL_GetTick()-QUERY_INTERVAL-1;
         startConnectTime = HAL_GetTick();
         bTimeoutElapsed = false;
         while(!bBaseConnected && !bTimeoutElapsed) {
@@ -315,7 +323,7 @@ connectBase() {
             if(HAL_GetTick() < startConnectTime) // counter overflow
                 startConnectTime = HAL_GetTick();
             bTimeoutElapsed = (HAL_GetTick()-startConnectTime) > MAX_CONNECTION_TIME;
-        }
+        } // while(!bBaseConnected && !bTimeoutElapsed)
 
         if(!bBaseConnected) { // Connection timed out...
             // Probaly we should set the NOACK to avoid loosing the ACK message
@@ -330,7 +338,7 @@ connectBase() {
     } while(!bBaseConnected);
 
     ledsOff(); // Connection with the Remote established...
-}
+} // void connectBase()
 
 
 void
@@ -342,7 +350,7 @@ connectRemote() {
     bRadioDataAvailable  = false;
 
     bool bRemoteConnected = false;
-    bool bTimeoutElapsed;
+    bool bTimeoutElapsed  = false;
     BSP_LED_On(LED_GREEN);
     while(!bRemoteConnected) {
         bConnectionAccepted  = false;
@@ -352,38 +360,40 @@ connectRemote() {
         while(!bRadioDataAvailable) {
         }
         bRadioDataAvailable  = false;
-        BSP_LED_On(LED_BLUE);
+
+        BSP_LED_On(LED_ORANGE);
         rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
-        BSP_LED_Off(LED_BLUE);
+        BSP_LED_Off(LED_ORANGE);
 
         if(rxBuffer[0] == checkBaseRequestCmd) {
             if(bConnectionWanted) {
                 txBuffer[0] = wantConnectAck;
                 bRemoteConnected = true;
                 bConnectionAccepted = true;
-                BSP_LED_On(LED_ORANGE);
+                BSP_LED_On(LED_BLUE);
                 rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
-                BSP_LED_Off(LED_ORANGE);
+                BSP_LED_Off(LED_BLUE);
                 HAL_Delay(QUERY_INTERVAL+1); // Give time to  the Base of receiving
                                              // the Ack and to convert into PRX mode
             }
             if(bSendOpenGate) {
                 txBuffer[0] = openGateAck;
                 bSendOpenGate    = false;
-                BSP_LED_On(LED_ORANGE);
+                BSP_LED_On(LED_BLUE);
                 rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
-                BSP_LED_Off(LED_ORANGE);
+                BSP_LED_Off(LED_BLUE);
             }
             if(bSendOpenCarGate) {
                 txBuffer[0] = openCarGateAck;
                 bSendOpenCarGate = false;
-                BSP_LED_On(LED_ORANGE);
+                BSP_LED_On(LED_BLUE);
                 rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
-                BSP_LED_Off(LED_ORANGE);
+                BSP_LED_Off(LED_BLUE);
             }
-        }
+        } // if(rxBuffer[0] == checkBaseRequestCmd)
 
         if(rxBuffer[0] == connectRequest) { // Connection Request received...
+
             bConnectionRequested = true;
             startAlarm();
             while(!bConnectionAccepted && !bConnectionTimedOut) {
@@ -392,15 +402,15 @@ connectRemote() {
                 }
                 if(bRadioDataAvailable) {
                     bRadioDataAvailable = false;
-                    BSP_LED_On(LED_BLUE);
+                    BSP_LED_On(LED_ORANGE);
                     rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
-                    BSP_LED_Off(LED_BLUE);
+                    BSP_LED_Off(LED_ORANGE);
                     if(rxBuffer[0] == connectionTimedOut) {
                         bConnectionTimedOut = true;
                     }
                 }
                 USBH_Process(&hUSB_Host); // USBH_Background Process
-            }
+            } // while(!bConnectionAccepted && !bConnectionTimedOut)
             stopAlarm();
 
             if(!bConnectionTimedOut) {
@@ -411,9 +421,9 @@ connectRemote() {
                         rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
                         if(rxBuffer[0] == connectRequest) { // Base is still asking for connection ?
                             txBuffer[0] = connectionAccepted;
-                            BSP_LED_On(LED_ORANGE);
+                            BSP_LED_On(LED_BLUE);
                             rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
-                            BSP_LED_Off(LED_ORANGE);
+                            BSP_LED_Off(LED_BLUE);
                             bRemoteConnected = true;
                             HAL_Delay(150); // Give time to send the Ack and to
                                             // convert the Base into PRX mode
@@ -472,9 +482,10 @@ processBase() {
             rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
             BSP_LED_Off(LED_ORANGE);
             if(pipeNum == 1) { // The packet contains Audio Data:
-                BSP_LED_On(LED_BLUE); // Signal the packet's start reading
                 // At first replay with our audio data...
+                BSP_LED_On(LED_BLUE); // Signal the packet's start reading
                 rf24.writeAckPayload(pipeNum, txBuffer, MAX_PAYLOAD_SIZE);
+                BSP_LED_Off(LED_BLUE); // Reading done
                 // Then place the data in the current Audio output chunk...
                 base = chunk2Write*MAX_PAYLOAD_SIZE;
                 for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
@@ -482,7 +493,6 @@ processBase() {
                     Audio_Out_Buffer[offset]   = rxBuffer[indx] << 8; // 1st Stereo Channel
                     Audio_Out_Buffer[offset+1] = rxBuffer[indx] << 8; // 2nd Stereo Channel
                 }
-                BSP_LED_Off(LED_BLUE); // Reading done
             }
             else { // The packet is a command
                 HAL_TIM_Base_Stop(&Tim2Handle); // Avoid interference with Audio Data...
@@ -544,6 +554,7 @@ processRemote() {
             bRadioDataAvailable = false;
             BSP_LED_On(LED_ORANGE); // Signal the packet's start reading
             rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
+            BSP_LED_Off(LED_ORANGE); // Reading done
             // Write data in the current Audio Buffer chunk
             base = chunk2Write*MAX_PAYLOAD_SIZE;
             for(uint8_t indx=0; indx<MAX_PAYLOAD_SIZE; indx++) {
@@ -552,7 +563,6 @@ processRemote() {
                 Audio_Out_Buffer[offset+1] = rxBuffer[indx] << 8; // 2nd Stereo Channel
             }
             startTimeout = HAL_GetTick();
-            BSP_LED_Off(LED_ORANGE); // Reading done
             // We have done with the new data...
         } // if(bRadioDataAvailable)
 
