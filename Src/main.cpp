@@ -280,6 +280,12 @@ connectBase() {
                     bBaseSleeping = false;
                     bBaseConnected = true;
                 }
+                if(rxBuffer[0] == openGateAck) {
+                    relayPulse(GATE_RELAY_TIM_CHANNEL, 1500);
+                }
+                if(rxBuffer[0] == openCarGateAck) {
+                    relayPulse(CAR_GATE_RELAY_TIM_CHANNEL, 1500);
+                }
             }
         } // while(bBaseSleeping)
 
@@ -350,15 +356,27 @@ connectRemote() {
         rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
         BSP_LED_Off(LED_BLUE);
 
-        if((rxBuffer[0] == checkConnectCmd) && bConnectionWanted) {
-            txBuffer[0] = checkConnectAck;
+        if(rxBuffer[0] == checkConnectCmd) {
+            if(bConnectionWanted) {
+                txBuffer[0] = checkConnectAck;
+                bRemoteConnected = true;
+                bConnectionAccepted = true;
+            }
+            if(bSendOpenGate) {
+                txBuffer[0] = openGateAck;
+                bSendOpenGate    = false;
+            }
+            if(bSendOpenCarGate) {
+                txBuffer[0] = openCarGateAck;
+                bSendOpenCarGate = false;
+            }
             BSP_LED_On(LED_ORANGE);
             rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
-            bRemoteConnected = true;
-            bConnectionAccepted = true;
-            HAL_Delay(QUERY_INTERVAL+1); // Give time to  the Base of receiving
-                                         // the Ack and to convert into PRX mode
             BSP_LED_Off(LED_ORANGE);
+            if(bConnectionAccepted) {
+                HAL_Delay(QUERY_INTERVAL+1); // Give time to  the Base of receiving
+                                             // the Ack and to convert into PRX mode
+            }
         }
 
         if(rxBuffer[0] == connectRequest) { // Connection Request received...
