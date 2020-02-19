@@ -64,8 +64,8 @@ typedef enum {
     connectionTimedOut,
     suspendCmd,
     suspendAck,
-    checkConnectCmd,
-    checkConnectAck,
+    checkBaseRequestCmd,
+    wantConnectAck,
     openGateCmd,
     openGateAck,
     openCarGateCmd,
@@ -265,7 +265,7 @@ connectBase() {
         while(bBaseSleeping) {
             if(HAL_GetTick()-t0 > QUERY_INTERVAL) { // Is the Remote asking for conection ?
                 t0 = HAL_GetTick();
-                txBuffer[0] = checkConnectCmd;
+                txBuffer[0] = checkBaseRequestCmd;
                 BSP_LED_On(LED_BLUE);
                 rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
                 rf24.startWrite();
@@ -276,7 +276,7 @@ connectBase() {
                 BSP_LED_On(LED_ORANGE);
                 rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
                 BSP_LED_Off(LED_ORANGE);
-                if(rxBuffer[0] == checkConnectAck) { // If true Remote is asking for connection
+                if(rxBuffer[0] == wantConnectAck) { // If true Remote is asking for connection
                     bBaseSleeping = false;
                     bBaseConnected = true;
                 }
@@ -356,9 +356,9 @@ connectRemote() {
         rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
         BSP_LED_Off(LED_BLUE);
 
-        if(rxBuffer[0] == checkConnectCmd) {
+        if(rxBuffer[0] == checkBaseRequestCmd) {
             if(bConnectionWanted) {
-                txBuffer[0] = checkConnectAck;
+                txBuffer[0] = wantConnectAck;
                 bRemoteConnected = true;
                 bConnectionAccepted = true;
                 BSP_LED_On(LED_ORANGE);
