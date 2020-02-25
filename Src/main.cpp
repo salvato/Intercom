@@ -366,34 +366,34 @@ connectRemote() {
         BSP_LED_Off(LED_ORANGE);
 
         if(rxBuffer[0] == checkBaseRequestCmd) {
-            if(bConnectionWanted) {
-                txBuffer[0] = wantConnectAck;
+            if(bSendOpenGate) {
+                bSendOpenGate = false;
+                txBuffer[0] = openGateAck;
+                BSP_LED_On(LED_BLUE);
+                rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
+                BSP_LED_Off(LED_BLUE);
+            }
+            else if(bSendOpenCarGate) {
+                bSendOpenCarGate = false;
+                txBuffer[0] = openCarGateAck;
+                BSP_LED_On(LED_BLUE);
+                rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
+                BSP_LED_Off(LED_BLUE);
+            }
+            else if(bConnectionWanted) {
+                bConnectionWanted = false;
                 bRemoteConnected = true;
                 bConnectionAccepted = true;
+                txBuffer[0] = wantConnectAck;
                 BSP_LED_On(LED_BLUE);
                 rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
                 BSP_LED_Off(LED_BLUE);
-                HAL_Delay(QUERY_INTERVAL+1); // Give time to  the Base of receiving
+                HAL_Delay(QUERY_INTERVAL+1); // Give time to the Base of receiving
                                              // the Ack and to convert into PRX mode
-            }
-            if(bSendOpenGate) {
-                txBuffer[0] = openGateAck;
-                bSendOpenGate    = false;
-                BSP_LED_On(LED_BLUE);
-                rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
-                BSP_LED_Off(LED_BLUE);
-            }
-            if(bSendOpenCarGate) {
-                txBuffer[0] = openCarGateAck;
-                bSendOpenCarGate = false;
-                BSP_LED_On(LED_BLUE);
-                rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
-                BSP_LED_Off(LED_BLUE);
             }
         } // if(rxBuffer[0] == checkBaseRequestCmd)
 
         if(rxBuffer[0] == connectRequest) { // Connection Request received...
-
             bConnectionRequested = true;
             startAlarm();
             while(!bConnectionAccepted && !bConnectionTimedOut) {
