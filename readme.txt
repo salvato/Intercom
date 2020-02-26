@@ -1,27 +1,30 @@
-WORK IN PROGRESS
+Questo è un "ripetitore" wireless del normale citofono (Farfisa 5 fili).
 
-Nella fase di "Riposo" la stazione "Base" è configurata come PTX e le stazioni
-"Remote" sono configurate come PRX, ciascuna con il proprio indirizzo.
+Il sistema è costituito da una stazione "Base" connessa in "parallelo"
+al ricevitore citofonico posto all'ingresso dell'abitazione e da una
+stazione "Remote" che può essere posizionata ai piani superiori
+dell'abitazione.
 
-Per verificare il funzionamento dell'impianto la Base può interrogare
-periodicamente le Remote e segnalare quando qualcuna di queste non risponde.
+Nella fase di "Riposo" la stazione "Base" è configurata come PTX e la stazione
+"Remote" è configurata come PRX.
 
-All'arrivo di una "Chiamata Esterna", la stazione Base invia la segnalazione
-a ciascuna delle stazioni Remote e resta in attesa che una di esse risponda
-alla chiamata.
+Per verificare se la Remote vuole comunicare con la Base (per esempio per
+comandare l'apertura dei cancelli o per verificare acusticamente la presenza
+di persone) la Base interroga periodicamente la Remote ed esegue i comandi
+che la Remote richiede.
 
-In questa fase la Base è ancora PTX e le Remote sono ancora PRX. La Base
-dopo aver fatto squillare gli "Allerta" su tutti i Remote continua a
-interrogarli ciclicamente per un periodo di tempo "T_Allerta".
+All'arrivo di una "Chiamata Esterna", la stazione Base invia la richiesta
+di collegamento e resta in attesa di una risposta per un tempo finito.
 
-Se, nel frattempo, la Base riceve altre Chiamate Esterne, fa ricominciare la
-procedura di "Allerta" facendo ripartire il conteggio di T_Allerta.
+In questa fase la Base è ancora PTX e la Remote è ancora PRX.
 
-Se entro il tempo T_Allerta nessuna Remote risponde alla chiamata la Base
-ritorna nella fase di Riposo.
+All'arrivo di una richiesta di collegamento la Remote attiva la "suoneria"
+e attende che l'utente accetti la richiesta per un tempo determinato.
 
-Quando, invece, una Remote risponde la Base commuta e diviene la PRX mentre la
-Remote che ha risposto diviene la PTX.
+Se nessun utente accetta in tempo la richiesta la Base ritorna nella fase di Riposo.
+
+Se invece la Remote risponde in tempo la Base commuta e diviene PRX mentre la
+Remote diviene la PTX.
 
 La Base apre in ricezione due "Pipes":
     una per lo scambio delle informazioni sonore e
