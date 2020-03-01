@@ -107,6 +107,7 @@
      
 //------------------------------------------------------------------------------
 
+
 #include "stm32_adafruit_sd.h"
 #include "stm32f4xx_hal_gpio.h"
 #include "stm32f4xx_hal_rcc.h"
@@ -115,6 +116,37 @@
 #include "stdlib.h"
 #include "string.h"
 #include "stdio.h"
+
+#define FS_READNONLY 1
+
+#define NUCLEO_SPIx                                     SPI1
+#define NUCLEO_SPIx_CLK_ENABLE()                        __HAL_RCC_SPI1_CLK_ENABLE()
+
+#define NUCLEO_SPIx_SCK_AF                              GPIO_AF5_SPI1
+#define NUCLEO_SPIx_SCK_GPIO_PORT                       GPIOA
+#define NUCLEO_SPIx_SCK_PIN                             GPIO_PIN_5
+#define NUCLEO_SPIx_SCK_GPIO_CLK_ENABLE()               __HAL_RCC_GPIOA_CLK_ENABLE()
+#define NUCLEO_SPIx_SCK_GPIO_CLK_DISABLE()              __HAL_RCC_GPIOA_CLK_DISABLE()
+
+#define NUCLEO_SPIx_MISO_MOSI_AF                        GPIO_AF5_SPI1
+#define NUCLEO_SPIx_MISO_MOSI_GPIO_PORT                 GPIOA
+#define NUCLEO_SPIx_MISO_MOSI_GPIO_CLK_ENABLE()         __HAL_RCC_GPIOA_CLK_ENABLE()
+#define NUCLEO_SPIx_MISO_MOSI_GPIO_CLK_DISABLE()        __HAL_RCC_GPIOA_CLK_DISABLE()
+#define NUCLEO_SPIx_MISO_PIN                            GPIO_PIN_6
+#define NUCLEO_SPIx_MOSI_PIN                            GPIO_PIN_7
+// Maximum Timeout values for flags waiting loops. These timeouts are not based
+//   on accurate values, they just guarantee that the application will not remain
+//   stuck if the SPI communication is corrupted.
+//   You may modify these timeout values depending on CPU frequency and application
+//   conditions (interrupts routines ...).
+#define NUCLEO_SPIx_TIMEOUT_MAX                   1000
+
+
+//  * @brief  SD Control Interface pins (shield D4)
+#define SD_CS_PIN                                 GPIO_PIN_5
+#define SD_CS_GPIO_PORT                           GPIOB
+#define SD_CS_GPIO_CLK_ENABLE()                 __HAL_RCC_GPIOB_CLK_ENABLE()
+#define SD_CS_GPIO_CLK_DISABLE()                __HAL_RCC_GPIOB_CLK_DISABLE()
 
 
 typedef struct {
@@ -220,36 +252,6 @@ typedef enum
 } SD_Error;
 
 
-#define NUCLEO_SPIx                                     SPI1
-#define NUCLEO_SPIx_CLK_ENABLE()                        __HAL_RCC_SPI1_CLK_ENABLE()
-
-#define NUCLEO_SPIx_SCK_AF                              GPIO_AF5_SPI1
-#define NUCLEO_SPIx_SCK_GPIO_PORT                       GPIOA
-#define NUCLEO_SPIx_SCK_PIN                             GPIO_PIN_5
-#define NUCLEO_SPIx_SCK_GPIO_CLK_ENABLE()               __HAL_RCC_GPIOA_CLK_ENABLE()
-#define NUCLEO_SPIx_SCK_GPIO_CLK_DISABLE()              __HAL_RCC_GPIOA_CLK_DISABLE()
-
-#define NUCLEO_SPIx_MISO_MOSI_AF                        GPIO_AF5_SPI1
-#define NUCLEO_SPIx_MISO_MOSI_GPIO_PORT                 GPIOA
-#define NUCLEO_SPIx_MISO_MOSI_GPIO_CLK_ENABLE()         __HAL_RCC_GPIOA_CLK_ENABLE()
-#define NUCLEO_SPIx_MISO_MOSI_GPIO_CLK_DISABLE()        __HAL_RCC_GPIOA_CLK_DISABLE()
-#define NUCLEO_SPIx_MISO_PIN                            GPIO_PIN_6
-#define NUCLEO_SPIx_MOSI_PIN                            GPIO_PIN_7
-// Maximum Timeout values for flags waiting loops. These timeouts are not based
-//   on accurate values, they just guarantee that the application will not remain
-//   stuck if the SPI communication is corrupted.
-//   You may modify these timeout values depending on CPU frequency and application
-//   conditions (interrupts routines ...).
-#define NUCLEO_SPIx_TIMEOUT_MAX                   1000
-
-
-//  * @brief  SD Control Interface pins (shield D4)
-#define SD_CS_PIN                                 GPIO_PIN_5
-#define SD_CS_GPIO_PORT                           GPIOB
-#define SD_CS_GPIO_CLK_ENABLE()                 __HAL_RCC_GPIOB_CLK_ENABLE()
-#define SD_CS_GPIO_CLK_DISABLE()                __HAL_RCC_GPIOB_CLK_DISABLE()
-
-
 //  * @brief  SD Control Lines management
 #define SD_CS_LOW()       HAL_GPIO_WritePin(SD_CS_GPIO_PORT, SD_CS_PIN, GPIO_PIN_RESET)
 #define SD_CS_HIGH()      HAL_GPIO_WritePin(SD_CS_GPIO_PORT, SD_CS_PIN, GPIO_PIN_SET)
@@ -278,7 +280,9 @@ static uint8_t SD_WaitData(uint8_t data);
 static uint8_t SD_ReadData(void);
 
 static void       SPIx_Init(void);
+#ifndef FS_READNONLY
 static void       SPIx_Write(uint8_t Value);
+#endif
 static void       SPIx_WriteReadData(const uint8_t *DataIn, uint8_t *DataOut, uint16_t DataLegnth);
 static void       SPIx_Error(void);
 static void       SPIx_MspInit(SPI_HandleTypeDef *hspi);
@@ -375,6 +379,7 @@ SPIx_WriteReadData(const uint8_t *DataIn, uint8_t *DataOut, uint16_t DataLegnth)
 }
 
 
+#ifndef FS_READNONLY
 //  * @brief  SPI Write a byte to device.
 //  * @param  Value: value to be written
 static void
@@ -390,6 +395,7 @@ SPIx_Write(uint8_t Value) {
         SPIx_Error();
     }
 }
+#endif
 
 
 //  * @brief  SPI error treatment function.
