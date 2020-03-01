@@ -1,8 +1,8 @@
 /**
   ******************************************************************************
-  * @file    usbh_diskio_dma.h
+  * @file    sd_diskio.h
   * @author  MCD Application Team
-  * @brief   Header for usbh_diskio_dma.c module.
+  * @brief   Header for sd_diskio.c module.
   ******************************************************************************
   * @attention
   *
@@ -44,20 +44,17 @@
   */
 
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __USBH_DISKIO_H
-#define __USBH_DISKIO_H
+#ifndef __SD_DISKIO_H
+#define __SD_DISKIO_H
 
 /* Includes ------------------------------------------------------------------*/
-#include "usbh_core.h"
-#include "usbh_msc.h"
-#include "ff_gen_drv.h"
-
+#include  "sd_BSP.h"
 /* Exported types ------------------------------------------------------------*/
 /* Exported constants --------------------------------------------------------*/
 /* Exported functions ------------------------------------------------------- */
-extern const Diskio_drvTypeDef  USBH_Driver;
+extern const Diskio_drvTypeDef  SD_Driver;
 
-#endif /* __USBH_DISKIO_H */
+#endif /* __SD_DISKIO_H */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
 

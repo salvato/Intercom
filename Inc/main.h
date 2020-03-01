@@ -3,11 +3,16 @@
 
 #include "stm32f4_discovery.h"
 #include "stm32f4_discovery_audio.h"
-#include "ff.h"
-#include "usbh_def.h"
+
+// FatFs includes component
+#include "ff_gen_drv.h"
+#include "sd_diskio.h"
+
+//#include "ff.h"
+//#include "usbh_def.h"
 
 
-/* Defines for the Audio playing process */
+// Defines for the Audio playing process
 #define WAVE_NAME         "0:audio_sample.wav"
 #define AUDIO_BUFFER_SIZE 4096
 
@@ -47,9 +52,6 @@ typedef struct {
 } WAVE_FormatTypeDef;
 
 
-
-
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -71,7 +73,6 @@ void BSP_AUDIO_OUT_ClockConfig(I2S_HandleTypeDef *hi2s, uint32_t AudioFreq, void
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin);
 void I2S3_IRQHandler(void);
 void I2S2_IRQHandler(void);
-void OTG_FS_IRQHandler(void);
 void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim);
 void TIM3_IRQHandler(void);
 void TIM7_IRQHandler(void);
@@ -86,7 +87,6 @@ extern I2S_HandleTypeDef hAudioInI2s;
 #ifdef __cplusplus
 }
 #endif
-
 
 
 #endif // __MAIN_H__

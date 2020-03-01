@@ -5,7 +5,6 @@
 #include "stdlib.h"
 #include "nRF24L01.h"
 #include "ff_gen_drv.h"
-#include "usbh_diskio_dma.h"
 #include "config.h"
 
 
@@ -96,7 +95,6 @@ static void processBase();
 static void processRemote();
 static void processReceivedCommand(uint8_t command, uint8_t sourcePipe);
 static void sendCommand(uint8_t command);
-static void USBH_UserProcess (USBH_HandleTypeDef *pHost, uint8_t vId);
 static bool prepareFileSystem();
 static bool closeFileSystem();
 static void startAlarm();
@@ -110,8 +108,6 @@ static void relayPulse(uint32_t relayChannel, uint16_t msPulse);
 TIM_HandleTypeDef  Tim2Handle;
 TIM_HandleTypeDef  Tim3Handle;
 ADC_HandleTypeDef  hAdc;
-USBH_HandleTypeDef hUSB_Host; // USB Host handle
-extern HCD_HandleTypeDef hhcd; // defined in usbh_conf.c
 
 char buf[255];
 
@@ -155,19 +151,19 @@ const uint8_t radioChannel = 2;
 
 
 //===============================================================
-// USB Disk and .wav File Variables
+// Disk and .wav File Variables
 //===============================================================
 char path[] = "0:/";
-FIL FileRead;
+FIL File2Read;
 DIR Directory;
-UINT bytesread;
-uint32_t WaveDataLength;
-__IO uint32_t AudioRemSize;
-WAVE_FormatTypeDef waveformat;
-FATFS USBDISKFatFs;          // File system object for USB disk logical drive
-char USBDISKPath[4];         // USB Host logical drive path
+FATFS DiskFatFs;          // File system object for disk logical drive
+char DiskPath[4];         // Logical drive path
 MSC_ApplicationTypeDef AppliState = APPLICATION_IDLE;
-static uint8_t  USBH_USR_ApplicationState = USBH_USR_FS_INIT;
+
+
+uint32_t           WaveDataLength;
+__IO uint32_t      AudioRemSize;
+WAVE_FormatTypeDef waveformat;
 //===============================================================
 
 
@@ -409,7 +405,6 @@ connectRemote() {
                         bConnectionTimedOut = true;
                     }
                 }
-                USBH_Process(&hUSB_Host); // USBH_Background Process
             } // while(!bConnectionAccepted && !bConnectionTimedOut)
             stopAlarm();
 
@@ -675,21 +670,21 @@ startAlarm() {
     if(!prepareFileSystem())
         Error_Handler();
     buffer_offset = BUFFER_OFFSET_NONE;
-    bytesread = 0;
+    UINT bytesread = 0;
     WaveDataLength = 0;
     AudioRemSize = 0;
-    if(f_open(&FileRead, WAVE_NAME , FA_READ) != FR_OK) {
+    if(f_open(&File2Read, WAVE_NAME , FA_READ) != FR_OK) {
         Error_Handler();
     }
     // Read the wav file header
-    f_read (&FileRead, &waveformat, sizeof(waveformat), &bytesread);
+    f_read (&File2Read, &waveformat, sizeof(waveformat), &bytesread);
     WaveDataLength = waveformat.FileSize;
     if(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, waveformat.SampleRate) != AUDIO_OK) {
         Error_Handler();
     }
     Audio_Buffer = (uint8_t*)malloc(AUDIO_BUFFER_SIZE*sizeof(*Audio_Buffer));
-    f_lseek(&FileRead, 0);
-    f_read (&FileRead, &Audio_Buffer[0], AUDIO_BUFFER_SIZE, &bytesread);
+    f_lseek(&File2Read, 0);
+    f_read (&File2Read, &Audio_Buffer[0], AUDIO_BUFFER_SIZE, &bytesread);
     AudioRemSize = WaveDataLength - bytesread;
     BSP_AUDIO_OUT_Play((uint16_t*)&Audio_Buffer[0], AUDIO_BUFFER_SIZE);
 }
@@ -697,16 +692,16 @@ startAlarm() {
 
 bool
 updateAlarm() {
-    bytesread = 0;
+    UINT bytesread = 0;
     if(buffer_offset == BUFFER_OFFSET_HALF) {
-        f_read(&FileRead,
+        f_read(&File2Read,
                &Audio_Buffer[0],
                AUDIO_BUFFER_SIZE/2,
                &bytesread);
         buffer_offset = BUFFER_OFFSET_NONE;
     }
     if(buffer_offset == BUFFER_OFFSET_FULL) {
-        f_read(&FileRead,
+        f_read(&File2Read,
                &Audio_Buffer[AUDIO_BUFFER_SIZE/2],
                AUDIO_BUFFER_SIZE/2,
                &bytesread);
@@ -727,7 +722,7 @@ void
 stopAlarm() {
     BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW);
     free(Audio_Buffer);
-    f_close(&FileRead);
+    f_close(&File2Read);
     closeFileSystem();
 }
 
@@ -804,55 +799,19 @@ relayPulse(uint32_t relayChannel, uint16_t msPulse) {
 }
 
 
-void
-USBH_UserProcess (USBH_HandleTypeDef *pHost, uint8_t vId) {
-    UNUSED(pHost);
-
-    switch(vId) {
-        case HOST_USER_SELECT_CONFIGURATION:
-            break;
-        case HOST_USER_DISCONNECTION:
-            AppliState = APPLICATION_IDLE;
-            f_mount(NULL, (TCHAR const*)"", 0);
-            break;
-        case HOST_USER_CLASS_ACTIVE:
-            AppliState = APPLICATION_START;
-            break;
-        case HOST_USER_CONNECTION:
-            break;
-        case HOST_USER_CLASS_SELECTED:
-            break;
-        case HOST_USER_UNRECOVERED_ERROR:
-            break;
-        default: // No other cases at present !
-            break;
-    } //switch(vId)
-}
-
-
 bool
 prepareFileSystem() {
     AppliState = APPLICATION_IDLE;
-    // Link the USB Host disk I/O
-    if(FATFS_LinkDriver(&USBH_Driver, USBDISKPath) != 0) return false;
-    if(USBH_Init(&hUSB_Host, USBH_UserProcess, 0) != USBH_OK) return false;
-    if(USBH_RegisterClass(&hUSB_Host, USBH_MSC_CLASS) != USBH_OK) return false;
-    if(USBH_Start(&hUSB_Host) != USBH_OK) return false;
 
-    USBH_USR_ApplicationState = USBH_USR_FS_INIT;
-    uint32_t startTime = HAL_GetTick();
-    bool bTimeoutElapsed = false;
-    while(AppliState != APPLICATION_START && !bTimeoutElapsed) {
-        USBH_Process(&hUSB_Host); // USBH_Background Process
-        bTimeoutElapsed = (HAL_GetTick()-startTime > 5000);
-    }
-    if(bTimeoutElapsed) // USB Disk not responding...
-        Error_Handler();
-
+    if(FATFS_LinkDriver(&SD_Driver, DiskPath) == 0)
+        return false;
     // Initializes (mount) the File System
-    if(f_mount(&USBDISKFatFs, (TCHAR const*)USBDISKPath, 0 ) != FR_OK ) return false;
-    if(f_opendir(&Directory, path) != FR_OK) return false;
-    USBH_USR_ApplicationState = USBH_USR_AUDIO;
+    if(f_mount(&DiskFatFs, (TCHAR const*)DiskPath, 0) != FR_OK)
+        return false;
+    if(f_opendir(&Directory, path) != FR_OK)
+        return false;
+
+    AppliState = APPLICATION_START;
     return true;
 }
 
@@ -861,10 +820,7 @@ bool
 closeFileSystem() {
     f_closedir(&Directory);
     f_mount(NULL, (TCHAR const*)"", 0);
-    USBH_Stop(&hUSB_Host);
-    HAL_Delay(200);
-    USBH_DeInit(&hUSB_Host);
-    FATFS_UnLinkDriverEx(USBDISKPath, 0);
+    FATFS_UnLinkDriverEx(DiskPath, 0);
     AppliState = APPLICATION_IDLE;
     return true;
 }
@@ -1088,11 +1044,6 @@ adcTIM2Init(void) {
 
 
 // extern "C" {
-
-void
-OTG_FS_IRQHandler(void) {
-    HAL_HCD_IRQHandler(&hhcd);
-}
 
 
 void

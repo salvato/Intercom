@@ -29,35 +29,28 @@ Src/system_stm32f4xx.c \
 Src/stm32f4_discovery.c \
 Src/cs43l22.c \
 Src/stm32f4_discovery_audio.c \
-Src/usbh_conf.c \
-Src/usbh_diskio_dma.c \
-HAL/Src/stm32f4xx_hal_gpio.c \
+Src/sd_diskio.c \
+Src/sd_BSP.c \
+FatFs/src/ff.c \
+FatFs/src/ff_gen_drv.c \
+FatFs/src/diskio.c \
+FatFs/src/option/syscall.c \
+FatFs/src/option/ccsbcs.c \
 HAL/Src/stm32f4xx_hal.c \
-HAL/Src/stm32f4xx_hal_spi.c \
+HAL/Src/stm32f4xx_hal_gpio.c \
 HAL/Src/stm32f4xx_hal_cortex.c \
+HAL/Src/stm32f4xx_hal_i2c.c \
+HAL/Src/stm32f4xx_hal_i2s.c \
+HAL/Src/stm32f4xx_hal_i2s_ex.c \
 HAL/Src/stm32f4xx_hal_dma.c \
-HAL/Src/stm32f4xx_hal_rcc.c \
 HAL/Src/stm32f4xx_hal_rcc_ex.c \
+HAL/Src/stm32f4xx_hal_sd.c \
+HAL/Src/stm32f4xx_hal_rcc.c\
+HAL/Src/stm32f4xx_ll_sdmmc.c \
 HAL/Src/stm32f4xx_hal_tim.c \
 HAL/Src/stm32f4xx_hal_tim_ex.c \
 HAL/Src/stm32f4xx_hal_adc.c \
-HAL/Src/stm32f4xx_hal_i2s.c \
-HAL/Src/stm32f4xx_hal_i2s_ex.c \
-HAL/Src/stm32f4xx_hal_i2c.c \
-HAL/Src/stm32f4xx_hal_hcd.c \
-HAL/Src/stm32f4xx_ll_usb.c \
-FatFs/src/ff.c \
-FatFs/src/diskio.c \
-FatFs/src/ff_gen_drv.c \
-FatFs/src/option/syscall.c \
-FatFs/src/option/ccsbcs.c \
-STM32_USB_Host_Library/Core/Src/usbh_core.c \
-STM32_USB_Host_Library/Class/MSC/Src/usbh_msc.c \
-STM32_USB_Host_Library/Class/MSC/Src/usbh_msc_scsi.c \
-STM32_USB_Host_Library/Class/MSC/Src/usbh_msc_bot.c \
-STM32_USB_Host_Library/Core/Src/usbh_ctlreq.c \
-STM32_USB_Host_Library/Core/Src/usbh_pipes.c \
-STM32_USB_Host_Library/Core/Src/usbh_ioreq.c \
+HAL/Src/stm32f4xx_hal_spi.c\
 
 # C++ sources
 CXX_SOURCES =  \
@@ -113,7 +106,6 @@ AS_DEFS =
 
 # C defines
 C_DEFS =  \
--DUSE_HAL_DRIVER \
 -DSTM32F407xx
 
 
@@ -125,8 +117,6 @@ C_INCLUDES =  \
 -IInc \
 -IHAL/Inc \
 -IFatFs/src \
--ISTM32_USB_Host_Library/Core/Inc \
--ISTM32_USB_Host_Library/Class/MSC/Inc \
 
 # compile gcc flags
 ASFLAGS = $(MCU) $(AS_DEFS) $(AS_INCLUDES) $(OPT) -Wall -fdata-sections -ffunction-sections
