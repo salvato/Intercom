@@ -30,7 +30,7 @@ Src/stm32f4_discovery.c \
 Src/cs43l22.c \
 Src/stm32f4_discovery_audio.c \
 Src/sd_diskio.c \
-Src/sd_BSP.c \
+Src/stm32_adafruit_sd.c \
 FatFs/src/ff.c \
 FatFs/src/ff_gen_drv.c \
 FatFs/src/diskio.c \

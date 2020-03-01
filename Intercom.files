@@ -87,8 +87,8 @@ Inc/mpu_armv7.h
 Inc/nRF24L01.h
 Inc/pdm2pcm_glo.h
 Inc/printf.h
-Inc/sd_BSP.h
 Inc/sd_diskio.h
+Inc/stm32_adafruit_sd.h
 Inc/stm32_hal_legacy.h
 Inc/stm32f407xx.h
 Inc/stm32f4_discovery.h
@@ -127,8 +127,8 @@ Src/RF24.cpp
 Src/SPI.cpp
 Src/cs43l22.c
 Src/main.cpp
-Src/sd_BSP.c
 Src/sd_diskio.c
+Src/stm32_adafruit_sd.c
 Src/stm32f4_discovery.c
 Src/stm32f4_discovery_audio.c
 Src/stm32f4xx_hal.c

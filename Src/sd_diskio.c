@@ -98,7 +98,7 @@ SD_Driver = {
 // Private functions
 static DSTATUS
 SD_CheckStatus(BYTE lun) {
-    UNUSED(lun);
+    (void)lun;
     Stat = STA_NOINIT;
     if(BSP_SD_GetCardState() == MSD_OK) {
         Stat &= ~STA_NOINIT;
@@ -141,7 +141,7 @@ SD_status(BYTE lun) {
 //  * @retval DRESULT: Operation result
 DRESULT
 SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count) {
-    UNUSED(lun);
+    (void)lun;
     DRESULT res = RES_ERROR;
     if(BSP_SD_ReadBlocks((uint32_t*)buff,
                          (uint32_t) (sector),
@@ -165,7 +165,7 @@ SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count) {
 #if _USE_WRITE == 1
 DRESULT
 SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count) {
-    UNUSED(lun);
+    (void)lun;
     DRESULT res = RES_ERROR;
     if(BSP_SD_WriteBlocks((uint32_t*)buff,
                           (uint32_t)(sector),
@@ -189,7 +189,7 @@ SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count) {
 #if _USE_IOCTL == 1
 DRESULT
 SD_ioctl(BYTE lun, BYTE cmd, void *buff) {
-    UNUSED(lun);
+    (void)lun;
     DRESULT res = RES_ERROR;
     BSP_SD_CardInfo CardInfo;
     if (Stat & STA_NOINIT)
