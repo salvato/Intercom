@@ -5,8 +5,8 @@
 //        / |  | | | | | | | |  |
 //        | |                   |
 //        |                     |
-//        | 1  2 3 4 5 6 7 8 9  |
-//        |                     |
+//        |    1 2 3 4 5 6 7 8  |
+//        | 9                   |
 //        |                     |
 //        |         SD          |
 //        |        Card         |
@@ -14,15 +14,17 @@
 //        |                     |
 //        |_____________________|
 
-//        Pin 1 - Data 2
-//        Pin 2 - Data 3
-//        Pin 3 - Cmd I/O
-//        Pin 4 - Gnd
-//        Pin 5 - Vdd
-//        Pin 6 - Clock
-//        Pin 7 - Gnd
-//        Pin 8 - Data 0
-//        Pin 9 - Data 1
+//        Mode    SDIO          SPI
+//        ---------------------------------
+//        Pin 1 - Data 3        ~Card Select
+//        Pin 2 - Cmd I/O       MOSI
+//        Pin 3 - Gnd
+//        Pin 4 - Vdd (3.3V)
+//        Pin 5 - Clock         SCLK
+//        Pin 6 - Gnd
+//        Pin 7 - Data 0        MISO
+//        Pin 8 - Data 1        NC
+//        Pin 9 - Data 2        NC
 
 
 //------------------------------------------------------------------------------
