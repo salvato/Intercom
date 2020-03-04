@@ -197,29 +197,6 @@ __IO bool bCarGateOpening;
 
 int
 main(void) {
-
-    SD_CardInfo CardInfo;
-    memset(&CardInfo, 0, sizeof(CardInfo));
-
-    HAL_Init();
-    SystemClock_Config();
-    initLeds();
-    BSP_SD_Init();
-    if(BSP_SD_GetCardInfo(&CardInfo) != MSD_OK) {
-        Error_Handler();
-    }
-
-    initBuffers(false);
-    startAlarm();
-    while(!updateAlarm()) {
-    }
-    stopAlarm();
-
-    while(true) {
-    }
-
-
-
     if(!initSystem())
         Error_Handler();
 
