@@ -139,6 +139,8 @@
 #define SD_SPIx_MOSI_PIN                            GPIO_PIN_15
 #define SD_SPIx_MOSI_GPIO_CLK_ENABLE()              __HAL_RCC_GPIOC_CLK_ENABLE()
 #define SD_SPIx_MOSI_GPIO_CLK_DISABLE()             __HAL_RCC_GPIOC_CLK_DISABLE()
+
+
 // Maximum Timeout values for flags waiting loops. These timeouts are not based
 //   on accurate values, they just guarantee that the application will not remain
 //   stuck if the SPI communication is corrupted.
@@ -355,7 +357,7 @@ SPIx_Init(void) {
           - SD card SPI interface max baudrate is 25MHz for write/read
           - PCLK2 max frequency is 100 MHz
        */
-        hnucleo_Spi.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_8;
+        hnucleo_Spi.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
         hnucleo_Spi.Init.Direction = SPI_DIRECTION_2LINES;
         hnucleo_Spi.Init.CLKPhase = SPI_PHASE_2EDGE;
         hnucleo_Spi.Init.CLKPolarity = SPI_POLARITY_HIGH;

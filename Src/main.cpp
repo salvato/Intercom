@@ -197,8 +197,24 @@ __IO bool bCarGateOpening;
 
 int
 main(void) {
+
+
+    HAL_Init();
+    SystemClock_Config();
+    initLeds();
+    initBuffers(false);
+    startAlarm();
+    while(!updateAlarm()) {
+    }
+    stopAlarm();
+    while(true) {
+    }
+
+
+
     if(!initSystem())
         Error_Handler();
+
     // Ready for the endless loop...
     while(true) {
         if(isBaseStation) {
