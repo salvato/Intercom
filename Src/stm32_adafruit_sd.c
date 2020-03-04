@@ -308,7 +308,6 @@ SPIx_MspInit(SPI_HandleTypeDef *hspi) {
     GPIO_InitTypeDef  GPIO_InitStruct;
 
     /*** Configure the GPIOs ***/
-    /* Enable GPIO clock */
     SD_SPIx_SCK_GPIO_CLK_ENABLE();
     SD_SPIx_MISO_GPIO_CLK_ENABLE();
     SD_SPIx_MOSI_GPIO_CLK_ENABLE();
@@ -321,21 +320,17 @@ SPIx_MspInit(SPI_HandleTypeDef *hspi) {
     GPIO_InitStruct.Alternate = SD_SPIx_SCK_AF;
     HAL_GPIO_Init(SD_SPIx_SCK_GPIO_PORT, &GPIO_InitStruct);
 
-    /* Configure SPI MISO */
-    GPIO_InitStruct.Pin = SD_SPIx_MOSI_PIN;
-    GPIO_InitStruct.Alternate = SD_SPIx_MISO_AF;
-    GPIO_InitStruct.Pull  = GPIO_PULLDOWN;
-    HAL_GPIO_Init(SD_SPIx_MISO_GPIO_PORT, &GPIO_InitStruct);
-
     /* Configure SPI MOSI */
     GPIO_InitStruct.Pin = SD_SPIx_MOSI_PIN;
     GPIO_InitStruct.Alternate = SD_SPIx_MOSI_AF;
     GPIO_InitStruct.Pull  = GPIO_PULLDOWN;
     HAL_GPIO_Init(SD_SPIx_MOSI_GPIO_PORT, &GPIO_InitStruct);
 
+    /* Configure SPI MISO */
     GPIO_InitStruct.Pin = SD_SPIx_MISO_PIN;
+    GPIO_InitStruct.Alternate = SD_SPIx_MISO_AF;
     GPIO_InitStruct.Pull  = GPIO_PULLDOWN;
-    HAL_GPIO_Init(SD_SPIx_MOSI_GPIO_PORT, &GPIO_InitStruct);
+    HAL_GPIO_Init(SD_SPIx_MISO_GPIO_PORT, &GPIO_InitStruct);
 
     /*** Configure the SPI peripheral ***/
     /* Enable SPI clock */
@@ -349,25 +344,19 @@ SPIx_Init(void) {
     if(HAL_SPI_GetState(&hnucleo_Spi) == HAL_SPI_STATE_RESET) {
         /* SPI Config */
         hnucleo_Spi.Instance = SD_SPIx;
-        /* SPI baudrate is set to 12,5 MHz maximum (APB1/SPI_BaudRatePrescaler = 100/8 = 12,5 MHz)
-       to verify these constraints:
-          - ST7735 LCD SPI interface max baudrate is 15MHz for write and 6.66MHz for read
-            Since the provided driver doesn't use read capability from LCD, only constraint
-            on write baudrate is considered.
-          - SD card SPI interface max baudrate is 25MHz for write/read
-          - PCLK2 max frequency is 100 MHz
-       */
-        hnucleo_Spi.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
-        hnucleo_Spi.Init.Direction = SPI_DIRECTION_2LINES;
-        hnucleo_Spi.Init.CLKPhase = SPI_PHASE_2EDGE;
-        hnucleo_Spi.Init.CLKPolarity = SPI_POLARITY_HIGH;
-        hnucleo_Spi.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLED;
-        hnucleo_Spi.Init.CRCPolynomial = 7;
-        hnucleo_Spi.Init.DataSize = SPI_DATASIZE_8BIT;
-        hnucleo_Spi.Init.FirstBit = SPI_FIRSTBIT_MSB;
-        hnucleo_Spi.Init.NSS = SPI_NSS_SOFT;
-        hnucleo_Spi.Init.TIMode = SPI_TIMODE_DISABLED;
-        hnucleo_Spi.Init.Mode = SPI_MODE_MASTER;
+        // SPI baudrate is set to 10,5 MHz (APB1/SPI_BaudRatePrescaler = 42/4 = 10,5 MHz)
+        // - SD card SPI interface max baudrate is 25MHz for write/read
+        hnucleo_Spi.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_256;
+        hnucleo_Spi.Init.Direction         = SPI_DIRECTION_2LINES;
+        hnucleo_Spi.Init.CLKPhase          = SPI_PHASE_2EDGE;
+        hnucleo_Spi.Init.CLKPolarity       = SPI_POLARITY_HIGH;
+        hnucleo_Spi.Init.CRCCalculation    = SPI_CRCCALCULATION_DISABLED;
+        hnucleo_Spi.Init.CRCPolynomial     = 7;
+        hnucleo_Spi.Init.DataSize          = SPI_DATASIZE_8BIT;
+        hnucleo_Spi.Init.FirstBit          = SPI_FIRSTBIT_MSB;
+        hnucleo_Spi.Init.NSS               = SPI_NSS_SOFT;
+        hnucleo_Spi.Init.TIMode            = SPI_TIMODE_DISABLED;
+        hnucleo_Spi.Init.Mode              = SPI_MODE_MASTER;
 
         SPIx_MspInit(&hnucleo_Spi);
         HAL_SPI_Init(&hnucleo_Spi);
@@ -423,8 +412,8 @@ SPIx_Error (void) {
 }
 
 
-//  * @brief  Initializes the SD Card and put it into StandBy State (Ready for
-//  *         data transfer).
+//  * @brief  Initializes the SD Card and put it into StandBy State
+//  *         (Ready for data transfer).
 void
 SD_IO_Init(void) {
     GPIO_InitTypeDef  GPIO_InitStruct;
@@ -434,24 +423,20 @@ SD_IO_Init(void) {
     SD_CS_GPIO_CLK_ENABLE();
 
     /* Configure SD_CS_PIN pin: SD Card CS pin */
-    GPIO_InitStruct.Pin = SD_CS_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    GPIO_InitStruct.Pin   = SD_CS_PIN;
+    GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull  = GPIO_PULLUP;
     GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
     HAL_GPIO_Init(SD_CS_GPIO_PORT, &GPIO_InitStruct);
 
     /*------------Put SD in SPI mode--------------*/
-    /* SD SPI Config */
-    SPIx_Init();
 
-    /* SD chip select high */
-    SD_CS_HIGH();
+    SPIx_Init();/* SD SPI Config */
 
-    /* Send dummy byte 0xFF, 10 times with CS high */
-    /* Rise CS and MOSI for 80 clocks cycles */
+    /* Send dummy byte 0xFF, 10 times with CS high: Rise CS and MOSI for 80 clocks cycles */
+    SD_CS_HIGH();/* SD chip select high */
     for(counter = 0; counter <= 9; counter++) {
-        /* Send dummy byte 0xFF */
-        SD_IO_WriteByte(SD_DUMMY_BYTE);
+        SD_IO_WriteByte(SD_DUMMY_BYTE);/* Send dummy byte 0xFF */
     }
 }
 
