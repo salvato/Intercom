@@ -13,7 +13,7 @@
 
 
 // Defines for the Audio playing process
-#define WAVE_NAME         "0:audio_sample.wav"
+#define WAVE_NAME         "0:Ave_Maria.wav"
 #define AUDIO_BUFFER_SIZE 4096
 
 

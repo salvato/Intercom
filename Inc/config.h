@@ -14,15 +14,15 @@
 //        |                     |
 //        |_____________________|
 
-//        Mode    SDIO          SPI
-//        ---------------------------------
-//        Pin 1 - Data 3        ~Card Select
-//        Pin 2 - Cmd I/O       MOSI
+//        Mode    SDIO          SPI             GPIO
+//        ---------------------------------------------
+//        Pin 1 - Data 3        ~Card Select    PB8
+//        Pin 2 - Cmd I/O       MOSI            PB15
 //        Pin 3 - Gnd
 //        Pin 4 - Vdd (3.3V)
-//        Pin 5 - Clock         SCLK
+//        Pin 5 - Clock         SCLK            PB13
 //        Pin 6 - Gnd
-//        Pin 7 - Data 0        MISO
+//        Pin 7 - Data 0        MISO            PC2
 //        Pin 8 - Data 1        NC
 //        Pin 9 - Data 2        NC
 
@@ -60,21 +60,18 @@
 
 
 //===============================================================
-//                 SD Pinout  <<<<<<<<<< MUST RESOLVE CONFLICTS !
+//        SD Pinout (Share SPI2 with MP45DT02 Microphone)
 //===============================================================
-// PD3      SD Detect
-// PC8      D0
-// PC9      D1
-// PC10     D2         !!! Conflicting with CS43L22 SCLK !!! <<<<<<<<<<
-// PC11     D3
-// PC12     CLK        !!! Conflicting with CS43L22 SDIN !!! <<<<<<<<<<
-// PD2      Cmd I/O
+// PB8      ~Card Select
+// PB15     MOSI
+// PC2      MISO
+// PB13     SCLK
 //===============================================================
 
 
 //===============================================================
 //                 CS43L22 Pinout (use I2S3==SPI3)
-//===============================================================
+//===================== ==========================================
 // PA4      LRCK
 // PA10     IRQ
 // PB6      SCL

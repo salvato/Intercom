@@ -119,31 +119,36 @@
 
 #define FS_READNONLY 1
 
-#define NUCLEO_SPIx                                     SPI1
-#define NUCLEO_SPIx_CLK_ENABLE()                        __HAL_RCC_SPI1_CLK_ENABLE()
+#define SD_SPIx                                     SPI2
+#define SD_SPIx_CLK_ENABLE()                        __HAL_RCC_SPI2_CLK_ENABLE()
 
-#define NUCLEO_SPIx_SCK_AF                              GPIO_AF5_SPI1
-#define NUCLEO_SPIx_SCK_GPIO_PORT                       GPIOA
-#define NUCLEO_SPIx_SCK_PIN                             GPIO_PIN_5
-#define NUCLEO_SPIx_SCK_GPIO_CLK_ENABLE()               __HAL_RCC_GPIOA_CLK_ENABLE()
-#define NUCLEO_SPIx_SCK_GPIO_CLK_DISABLE()              __HAL_RCC_GPIOA_CLK_DISABLE()
+#define SD_SPIx_SCK_AF                              GPIO_AF5_SPI2
+#define SD_SPIx_SCK_GPIO_PORT                       GPIOB
+#define SD_SPIx_SCK_PIN                             GPIO_PIN_13
+#define SD_SPIx_SCK_GPIO_CLK_ENABLE()               __HAL_RCC_GPIOB_CLK_ENABLE()
+#define SD_SPIx_SCK_GPIO_CLK_DISABLE()              __HAL_RCC_GPIOB_CLK_DISABLE()
 
-#define NUCLEO_SPIx_MISO_MOSI_AF                        GPIO_AF5_SPI1
-#define NUCLEO_SPIx_MISO_MOSI_GPIO_PORT                 GPIOA
-#define NUCLEO_SPIx_MISO_MOSI_GPIO_CLK_ENABLE()         __HAL_RCC_GPIOA_CLK_ENABLE()
-#define NUCLEO_SPIx_MISO_MOSI_GPIO_CLK_DISABLE()        __HAL_RCC_GPIOA_CLK_DISABLE()
-#define NUCLEO_SPIx_MISO_PIN                            GPIO_PIN_6
-#define NUCLEO_SPIx_MOSI_PIN                            GPIO_PIN_7
+#define SD_SPIx_MISO_AF                             GPIO_AF5_SPI2
+#define SD_SPIx_MISO_GPIO_PORT                      GPIOC
+#define SD_SPIx_MISO_PIN                            GPIO_PIN_2
+#define SD_SPIx_MISO_GPIO_CLK_ENABLE()              __HAL_RCC_GPIOC_CLK_ENABLE()
+#define SD_SPIx_MISO_GPIO_CLK_DISABLE()             __HAL_RCC_GPIOC_CLK_DISABLE()
+
+#define SD_SPIx_MOSI_AF                             GPIO_AF5_SPI2
+#define SD_SPIx_MOSI_GPIO_PORT                      GPIOB
+#define SD_SPIx_MOSI_PIN                            GPIO_PIN_15
+#define SD_SPIx_MOSI_GPIO_CLK_ENABLE()              __HAL_RCC_GPIOC_CLK_ENABLE()
+#define SD_SPIx_MOSI_GPIO_CLK_DISABLE()             __HAL_RCC_GPIOC_CLK_DISABLE()
 // Maximum Timeout values for flags waiting loops. These timeouts are not based
 //   on accurate values, they just guarantee that the application will not remain
 //   stuck if the SPI communication is corrupted.
 //   You may modify these timeout values depending on CPU frequency and application
 //   conditions (interrupts routines ...).
-#define NUCLEO_SPIx_TIMEOUT_MAX                   1000
+#define SD_SPIx_TIMEOUT_MAX                   1000
 
 
-//  * @brief  SD Control Interface pins (shield D4)
-#define SD_CS_PIN                                 GPIO_PIN_5
+//  * @brief  SD Control Interface pins
+#define SD_CS_PIN                                 GPIO_PIN_8
 #define SD_CS_GPIO_PORT                           GPIOB
 #define SD_CS_GPIO_CLK_ENABLE()                 __HAL_RCC_GPIOB_CLK_ENABLE()
 #define SD_CS_GPIO_CLK_DISABLE()                __HAL_RCC_GPIOB_CLK_DISABLE()
@@ -268,7 +273,7 @@ uint16_t flag_SDHC = 0;
 
 
 // Private function prototypes
-static uint32_t SpixTimeout = NUCLEO_SPIx_TIMEOUT_MAX; /*<! Value of Timeout when SPI communication fails */
+static uint32_t SpixTimeout = SD_SPIx_TIMEOUT_MAX; /*<! Value of Timeout when SPI communication fails */
 static SPI_HandleTypeDef hnucleo_Spi;
 
 static uint8_t SD_GetCIDRegister(SD_CID* Cid);
@@ -302,30 +307,37 @@ SPIx_MspInit(SPI_HandleTypeDef *hspi) {
 
     /*** Configure the GPIOs ***/
     /* Enable GPIO clock */
-    NUCLEO_SPIx_SCK_GPIO_CLK_ENABLE();
-    NUCLEO_SPIx_MISO_MOSI_GPIO_CLK_ENABLE();
+    SD_SPIx_SCK_GPIO_CLK_ENABLE();
+    SD_SPIx_MISO_GPIO_CLK_ENABLE();
+    SD_SPIx_MOSI_GPIO_CLK_ENABLE();
 
     /* Configure SPI SCK */
-    GPIO_InitStruct.Pin = NUCLEO_SPIx_SCK_PIN;
+    GPIO_InitStruct.Pin = SD_SPIx_SCK_PIN;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull  = GPIO_PULLUP;
     GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
-    GPIO_InitStruct.Alternate = NUCLEO_SPIx_SCK_AF;
-    HAL_GPIO_Init(NUCLEO_SPIx_SCK_GPIO_PORT, &GPIO_InitStruct);
+    GPIO_InitStruct.Alternate = SD_SPIx_SCK_AF;
+    HAL_GPIO_Init(SD_SPIx_SCK_GPIO_PORT, &GPIO_InitStruct);
 
-    /* Configure SPI MISO and MOSI */
-    GPIO_InitStruct.Pin = NUCLEO_SPIx_MOSI_PIN;
-    GPIO_InitStruct.Alternate = NUCLEO_SPIx_MISO_MOSI_AF;
+    /* Configure SPI MISO */
+    GPIO_InitStruct.Pin = SD_SPIx_MOSI_PIN;
+    GPIO_InitStruct.Alternate = SD_SPIx_MISO_AF;
     GPIO_InitStruct.Pull  = GPIO_PULLDOWN;
-    HAL_GPIO_Init(NUCLEO_SPIx_MISO_MOSI_GPIO_PORT, &GPIO_InitStruct);
+    HAL_GPIO_Init(SD_SPIx_MISO_GPIO_PORT, &GPIO_InitStruct);
 
-    GPIO_InitStruct.Pin = NUCLEO_SPIx_MISO_PIN;
+    /* Configure SPI MOSI */
+    GPIO_InitStruct.Pin = SD_SPIx_MOSI_PIN;
+    GPIO_InitStruct.Alternate = SD_SPIx_MOSI_AF;
     GPIO_InitStruct.Pull  = GPIO_PULLDOWN;
-    HAL_GPIO_Init(NUCLEO_SPIx_MISO_MOSI_GPIO_PORT, &GPIO_InitStruct);
+    HAL_GPIO_Init(SD_SPIx_MOSI_GPIO_PORT, &GPIO_InitStruct);
+
+    GPIO_InitStruct.Pin = SD_SPIx_MISO_PIN;
+    GPIO_InitStruct.Pull  = GPIO_PULLDOWN;
+    HAL_GPIO_Init(SD_SPIx_MOSI_GPIO_PORT, &GPIO_InitStruct);
 
     /*** Configure the SPI peripheral ***/
     /* Enable SPI clock */
-    NUCLEO_SPIx_CLK_ENABLE();
+    SD_SPIx_CLK_ENABLE();
 }
 
 
@@ -334,7 +346,7 @@ static void
 SPIx_Init(void) {
     if(HAL_SPI_GetState(&hnucleo_Spi) == HAL_SPI_STATE_RESET) {
         /* SPI Config */
-        hnucleo_Spi.Instance = NUCLEO_SPIx;
+        hnucleo_Spi.Instance = SD_SPIx;
         /* SPI baudrate is set to 12,5 MHz maximum (APB1/SPI_BaudRatePrescaler = 100/8 = 12,5 MHz)
        to verify these constraints:
           - ST7735 LCD SPI interface max baudrate is 15MHz for write and 6.66MHz for read

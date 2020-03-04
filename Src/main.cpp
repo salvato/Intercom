@@ -803,7 +803,7 @@ bool
 prepareFileSystem() {
     AppliState = APPLICATION_IDLE;
 
-    if(FATFS_LinkDriver(&SD_Driver, DiskPath) == 0)
+    if(FATFS_LinkDriver(&SD_Driver, DiskPath) != 0)
         return false;
     // Initializes (mount) the File System
     if(f_mount(&DiskFatFs, (TCHAR const*)DiskPath, 0) != FR_OK)
