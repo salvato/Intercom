@@ -128,11 +128,6 @@ pipes[6][5] = { // Note that NRF24L01(+) expects address LSB first
               };
 
 
-RF24
-rf24(NRF24_CE_PORT,  NRF24_CE_PIN,
-     NRF24_CSN_PORT, NRF24_CSN_PIN,
-     NRF24_IRQ_PORT, NRF24_IRQ_PIN, NRF24_IRQ_CHAN);
-
 
 // Data Buffers
 uint8_t*  rxBuffer         = NULL;
@@ -245,9 +240,9 @@ initSystem() {
     }
 
     // Init the Radio
-    if(!rf24.begin(radioChannel, RADIO_IN_IRQ_PREPRIO)) return false;
-    rf24.clearInterrupts();// Avoid false interrupts from Radio
-    rf24.maskIRQ(false, false, false);
+    if(!rf24Init(radioChannel, RADIO_IN_IRQ_PREPRIO)) return false;
+    rf24ClearInterrupts();// Avoid false interrupts from Radio
+    rf24MaskIRQ(false, false, false);
     return true;
 }
 
@@ -257,9 +252,9 @@ connectBase() {
     bool bTimeoutElapsed;
     uint32_t t0;
     setRole(PTX);
-    rf24.setRetries(5, 15);
-    rf24.flush_tx();
-    rf24.flush_rx();
+    rf24SetRetries(5, 15);
+    rf24Flush_tx();
+    rf24Flush_rx();
 
     BSP_LED_On(LED_GREEN);
     bRadioDataAvailable = false;
@@ -272,14 +267,14 @@ connectBase() {
                 t0 = HAL_GetTick();
                 txBuffer[0] = checkBaseRequestCmd;
                 BSP_LED_On(LED_BLUE);
-                rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-                rf24.startWrite();
+                rf24Enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+                rf24StartWrite();
                 BSP_LED_Off(LED_BLUE);
             }
             if(bRadioDataAvailable) {
                 bRadioDataAvailable = false;
                 BSP_LED_On(LED_ORANGE);
-                rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
+                rf24Read(rxBuffer, MAX_PAYLOAD_SIZE);
                 BSP_LED_Off(LED_ORANGE);
                 if(rxBuffer[0] == wantConnectAck) {
                     bBaseSleeping  = false;
@@ -303,14 +298,14 @@ connectBase() {
                 t0 = HAL_GetTick();
                 txBuffer[0] = connectRequest;
                 BSP_LED_On(LED_BLUE);
-                rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-                rf24.startWrite();
+                rf24Enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+                rf24StartWrite();
                 BSP_LED_Off(LED_BLUE);
             }
             if(bRadioDataAvailable) {
                 bRadioDataAvailable = false;
                 BSP_LED_On(LED_ORANGE); // Signal the packet's start reading
-                rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
+                rf24Read(rxBuffer, MAX_PAYLOAD_SIZE);
                 BSP_LED_Off(LED_ORANGE); // Reading done
                 if(rxBuffer[0] == connectionAccepted) {
                     bBaseConnected = true;
@@ -326,8 +321,8 @@ connectBase() {
             // Probaly we should set the NOACK to avoid loosing the ACK message
             txBuffer[0] = connectionTimedOut;
             BSP_LED_On(LED_BLUE);
-            rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-            rf24.startWrite();
+            rf24Enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+            rf24StartWrite();
             BSP_LED_Off(LED_BLUE);
             HAL_Delay(10);
         }
@@ -341,9 +336,9 @@ connectBase() {
 void
 connectRemote() {
     setRole(PRX);
-    rf24.setRetries(5, 15);
-    rf24.flush_tx();
-    rf24.flush_rx();
+    rf24SetRetries(5, 15);
+    rf24Flush_tx();
+    rf24Flush_rx();
     bRadioDataAvailable  = false;
 
     bool bRemoteConnected = false;
@@ -359,7 +354,7 @@ connectRemote() {
         bRadioDataAvailable  = false;
 
         BSP_LED_On(LED_ORANGE);
-        rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
+        rf24Read(rxBuffer, MAX_PAYLOAD_SIZE);
         BSP_LED_Off(LED_ORANGE);
 
         if(rxBuffer[0] == checkBaseRequestCmd) {
@@ -367,14 +362,14 @@ connectRemote() {
                 bSendOpenGate = false;
                 txBuffer[0] = openGateAck;
                 BSP_LED_On(LED_BLUE);
-                rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
+                rf24WriteAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
                 BSP_LED_Off(LED_BLUE);
             }
             else if(bSendOpenCarGate) {
                 bSendOpenCarGate = false;
                 txBuffer[0] = openCarGateAck;
                 BSP_LED_On(LED_BLUE);
-                rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
+                rf24WriteAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
                 BSP_LED_Off(LED_BLUE);
             }
             else if(bConnectionWanted) {
@@ -383,7 +378,7 @@ connectRemote() {
                 bConnectionAccepted = true;
                 txBuffer[0] = wantConnectAck;
                 BSP_LED_On(LED_BLUE);
-                rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
+                rf24WriteAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
                 BSP_LED_Off(LED_BLUE);
                 HAL_Delay(QUERY_INTERVAL+1); // Give time to the Base of receiving
                                              // the Ack and to convert into PRX mode
@@ -400,7 +395,7 @@ connectRemote() {
                 if(bRadioDataAvailable) {
                     bRadioDataAvailable = false;
                     BSP_LED_On(LED_ORANGE);
-                    rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
+                    rf24Read(rxBuffer, MAX_PAYLOAD_SIZE);
                     BSP_LED_Off(LED_ORANGE);
                     if(rxBuffer[0] == connectionTimedOut) {
                         bConnectionTimedOut = true;
@@ -414,11 +409,11 @@ connectRemote() {
                 do { // Wait one more Connection Request...
                     if(bRadioDataAvailable) {
                         bRadioDataAvailable = false;
-                        rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
+                        rf24Read(rxBuffer, MAX_PAYLOAD_SIZE);
                         if(rxBuffer[0] == connectRequest) { // Base is still asking for connection ?
                             txBuffer[0] = connectionAccepted;
                             BSP_LED_On(LED_BLUE);
-                            rf24.writeAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
+                            rf24WriteAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
                             BSP_LED_Off(LED_BLUE);
                             bRemoteConnected = true;
                             HAL_Delay(150); // Give time to send the Ack and to
@@ -447,9 +442,9 @@ processBase() {
     uint8_t pipeNum;
     bool bTimeoutElapsed;
     setRole(PRX); // Change role from PTX to PRX...
-    rf24.setRetries(1, 0); // We have to be fast !!!
-    rf24.flush_rx();
-    rf24.flush_tx();
+    rf24SetRetries(1, 0); // We have to be fast !!!
+    rf24Flush_rx();
+    rf24Flush_tx();
 
     adcInit();
     adcTIM2Init();
@@ -473,14 +468,14 @@ processBase() {
         if(bRadioDataAvailable) {
             bRadioDataAvailable = false;
             startTimeout = HAL_GetTick();
-            rf24.available(&pipeNum);
+            rf24Available(&pipeNum);
             BSP_LED_On(LED_ORANGE);
-            rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
+            rf24Read(rxBuffer, MAX_PAYLOAD_SIZE);
             BSP_LED_Off(LED_ORANGE);
             if(pipeNum == 1) { // The packet contains Audio Data:
                 // At first replay with our audio data...
                 BSP_LED_On(LED_BLUE); // Signal the packet's start reading
-                rf24.writeAckPayload(pipeNum, txBuffer, MAX_PAYLOAD_SIZE);
+                rf24WriteAckPayload(pipeNum, txBuffer, MAX_PAYLOAD_SIZE);
                 BSP_LED_Off(LED_BLUE); // Reading done
                 // Then place the data in the current Audio output chunk...
                 base = chunk2Write*MAX_PAYLOAD_SIZE;
@@ -518,9 +513,9 @@ processRemote() {
     uint8_t base;
     uint8_t offset;
     setRole(PTX); // Change role from PRX to PTX...
-    rf24.setRetries(1, 0); // We have to be fast !!!
-    rf24.flush_tx();
-    rf24.flush_rx();
+    rf24SetRetries(1, 0); // We have to be fast !!!
+    rf24Flush_tx();
+    rf24Flush_rx();
 
     BSP_AUDIO_IN_Init(DEFAULT_AUDIO_IN_FREQ, DEFAULT_AUDIO_IN_BIT_RESOLUTION, DEFAULT_AUDIO_IN_CHANNEL_NBR);
     BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
@@ -542,14 +537,14 @@ processRemote() {
             bReady2Send = false;       // the previous data were sent or lost !
             bRadioIrq = false;
             BSP_LED_On(LED_BLUE);
-            rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-            rf24.startWrite();     // buffer prepared by the Microphone
+            rf24Enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+            rf24StartWrite();     // buffer prepared by the Microphone
             BSP_LED_Off(LED_BLUE); // Reading done
         }
         if(bRadioDataAvailable) { // It's an Acknowledge Packet containing Audio
             bRadioDataAvailable = false;
             BSP_LED_On(LED_ORANGE); // Signal the packet's start reading
-            rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
+            rf24Read(rxBuffer, MAX_PAYLOAD_SIZE);
             BSP_LED_Off(LED_ORANGE); // Reading done
             // Write data in the current Audio Buffer chunk
             base = chunk2Write*MAX_PAYLOAD_SIZE;
@@ -607,7 +602,7 @@ processReceivedCommand(uint8_t command, uint8_t sourcePipe) {
             relayPulse(CAR_GATE_RELAY_TIM_CHANNEL, 1500);
         bCarGateOpening = true; // To avoid processing further equal commands
     }
-    rf24.writeAckPayload(sourcePipe, txBuffer, MAX_PAYLOAD_SIZE);
+    rf24WriteAckPayload(sourcePipe, txBuffer, MAX_PAYLOAD_SIZE);
     HAL_Delay(1); // Is this needed ???
 }
 
@@ -616,9 +611,9 @@ void
 sendCommand(uint8_t command) {
     uint8_t answer;
     BSP_AUDIO_IN_Stop(); // Ensure no other process can modify txBuffer
-    rf24.openWritingPipe(pipes[2]);
-    rf24.setRetries(5, 15);
-    rf24.flush_tx();     // Empty transmission queue
+    rf24OpenWritingPipe(pipes[2]);
+    rf24SetRetries(5, 15);
+    rf24Flush_tx();     // Empty transmission queue
     uint32_t startTimeout = HAL_GetTick();
     uint32_t t0 = HAL_GetTick()-QUERY_INTERVAL-1; // Just to force the first send.
     bool bTimeout       = false;
@@ -630,14 +625,14 @@ sendCommand(uint8_t command) {
         if(HAL_GetTick()-t0 > QUERY_INTERVAL) { // Send the command
             t0 = HAL_GetTick();
             BSP_LED_On(LED_BLUE);
-            rf24.enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
-            rf24.startWrite();
+            rf24Enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
+            rf24StartWrite();
             BSP_LED_Off(LED_BLUE);
         }
         if(bRadioDataAvailable) { // Get the Ack
             bRadioDataAvailable = false;
             BSP_LED_On(LED_ORANGE); // Signal the packet's start reading
-            rf24.read(rxBuffer, MAX_PAYLOAD_SIZE);
+            rf24Read(rxBuffer, MAX_PAYLOAD_SIZE);
             BSP_LED_Off(LED_ORANGE); // Reading done
             answer = *rxBuffer;
             if(answer == suspendAck) {
@@ -658,8 +653,8 @@ sendCommand(uint8_t command) {
     } while(!bCommandDone && !bTimeout);
 
     if(!bBaseDisconnected) {
-        rf24.openWritingPipe(pipes[0]);
-        rf24.setRetries(1, 0);
+        rf24OpenWritingPipe(pipes[0]);
+        rf24SetRetries(1, 0);
         BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE); // Restart sending Audio Data
     }
     HAL_Delay(150);
@@ -909,19 +904,19 @@ BSP_AUDIO_OUT_ClockConfig(I2S_HandleTypeDef *hi2s, uint32_t AudioFreq, void *Par
 void
 setRole(bool bPTX) {
     if(bPTX) {
-        rf24.stopListening(); // Change role from PRX to PTX...
-        rf24.openWritingPipe(pipes[0]);
+        rf24StopListening(); // Change role from PRX to PTX...
+        rf24OpenWritingPipe(pipes[0]);
         for(uint8_t i=1; i<6; i++) {
-            rf24.openReadingPipe(i, pipes[i]);
+            rf24OpenReadingPipe(i, pipes[i]);
         }
     }
     else {
-        rf24.openWritingPipe(pipes[1]);
-        rf24.openReadingPipe(1, pipes[0]);
+        rf24OpenWritingPipe(pipes[1]);
+        rf24OpenReadingPipe(1, pipes[0]);
         for(uint8_t i=2; i<6; i++) {
-            rf24.openReadingPipe(i, pipes[i]);
+            rf24OpenReadingPipe(i, pipes[i]);
         }
-        rf24.startListening();
+        rf24StartListening();
     }
 }
 
@@ -1052,7 +1047,7 @@ EXTI15_10_IRQHandler(void) { // We received a radio interrupt...
     __HAL_GPIO_EXTI_CLEAR_IT(NRF24_IRQ_PIN);
 
     // Read & reset the IRQ status
-    rf24.whatHappened(&txOk, &txFailed, &rxDataReady);
+    rf24WhatHappened(&txOk, &txFailed, &rxDataReady);
 
     if(rxDataReady) {
         bRadioDataAvailable = true;
@@ -1065,7 +1060,7 @@ EXTI15_10_IRQHandler(void) { // We received a radio interrupt...
     if(txFailed) { // nRF24L01+ asserts the IRQ pin when MAX_RT is reached
                    // but the payload in TX FIFO is NOT removed!
         BSP_LED_On(LED_RED);
-        rf24.flush_tx(); // Remove messages from the TX queue
+        rf24Flush_tx(); // Remove messages from the TX queue
     }
     bRadioIrq = true;
 }
