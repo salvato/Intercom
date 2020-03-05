@@ -14,7 +14,7 @@
 
 // Defines for the Audio playing process
 #define WAVE_NAME         "0:AveMaria.wav"
-#define AUDIO_BUFFER_SIZE 4096
+#define AUDIO_BUFFER_SIZE 1024
 
 
 typedef enum {

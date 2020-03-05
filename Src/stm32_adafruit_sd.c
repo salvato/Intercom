@@ -313,26 +313,25 @@ SPIx_MspInit(SPI_HandleTypeDef *hspi) {
     SD_SPIx_MOSI_GPIO_CLK_ENABLE();
 
     /* Configure SPI SCK */
-    GPIO_InitStruct.Pin = SD_SPIx_SCK_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-    GPIO_InitStruct.Pull  = GPIO_PULLUP;
-    GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
+    GPIO_InitStruct.Pin       = SD_SPIx_SCK_PIN;
+    GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull      = GPIO_PULLUP;
+    GPIO_InitStruct.Speed     = GPIO_SPEED_HIGH;
     GPIO_InitStruct.Alternate = SD_SPIx_SCK_AF;
     HAL_GPIO_Init(SD_SPIx_SCK_GPIO_PORT, &GPIO_InitStruct);
 
     /* Configure SPI MOSI */
-    GPIO_InitStruct.Pin = SD_SPIx_MOSI_PIN;
+    GPIO_InitStruct.Pin       = SD_SPIx_MOSI_PIN;
     GPIO_InitStruct.Alternate = SD_SPIx_MOSI_AF;
-    GPIO_InitStruct.Pull  = GPIO_PULLDOWN;
+    GPIO_InitStruct.Pull      = GPIO_PULLDOWN;
     HAL_GPIO_Init(SD_SPIx_MOSI_GPIO_PORT, &GPIO_InitStruct);
 
     /* Configure SPI MISO */
-    GPIO_InitStruct.Pin = SD_SPIx_MISO_PIN;
+    GPIO_InitStruct.Pin       = SD_SPIx_MISO_PIN;
     GPIO_InitStruct.Alternate = SD_SPIx_MISO_AF;
-    GPIO_InitStruct.Pull  = GPIO_PULLDOWN;
+    GPIO_InitStruct.Pull      = GPIO_PULLDOWN;
     HAL_GPIO_Init(SD_SPIx_MISO_GPIO_PORT, &GPIO_InitStruct);
 
-    /*** Configure the SPI peripheral ***/
     /* Enable SPI clock */
     SD_SPIx_CLK_ENABLE();
 }
@@ -344,9 +343,9 @@ SPIx_Init(void) {
     if(HAL_SPI_GetState(&hnucleo_Spi) == HAL_SPI_STATE_RESET) {
         /* SPI Config */
         hnucleo_Spi.Instance = SD_SPIx;
-        // SPI baudrate is set to 10,5 MHz (APB1/SPI_BaudRatePrescaler = 42/4 = 10,5 MHz)
+        // SPI baudrate is set to 10,5 MHz (APB1/SPI_BaudRatePrescaler = 42/2 = 21.0 MHz)
         // - SD card SPI interface max baudrate is 25MHz for write/read
-        hnucleo_Spi.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_4;
+        hnucleo_Spi.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
         hnucleo_Spi.Init.Direction         = SPI_DIRECTION_2LINES;
         hnucleo_Spi.Init.CLKPhase          = SPI_PHASE_2EDGE;
         hnucleo_Spi.Init.CLKPolarity       = SPI_POLARITY_HIGH;
