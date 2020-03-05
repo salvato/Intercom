@@ -78,9 +78,11 @@
 
 
 
-//                                 +------------+
-//                                 | User NOTES |
-//                                 +------------+
+//              +------------+
+//              | User NOTES |
+//              +------------+
+
+
 
 //1. How to use this driver:
 //--------------------------
@@ -117,7 +119,7 @@
 #include "string.h"
 #include "stdio.h"
 
-#define FS_READNONLY 1
+#define FS_READNONLY                            1
 
 #define SD_SPIx                                 SPI2
 #define SD_SPIx_CLK_ENABLE()                    __HAL_RCC_SPI2_CLK_ENABLE()
@@ -217,15 +219,16 @@ __IO uint8_t SdStatus = SD_NOT_PRESENT;
 
 
 // flag_SDHC :
-//      0 :  Standard capacity
+//      0 : Standard capacity
 //      1 : High capacity
 uint16_t flag_SDHC = 0; 
+// Value of Timeout when SPI communication fails
+static uint32_t SpixTimeout = SD_SPIx_TIMEOUT_MAX;
+
+SPI_HandleTypeDef hnucleo_Spi;
 
 
 // Private function prototypes
-static uint32_t SpixTimeout = SD_SPIx_TIMEOUT_MAX; /*<! Value of Timeout when SPI communication fails */
-SPI_HandleTypeDef hnucleo_Spi;
-
 static uint8_t SD_GetCIDRegister(SD_CID* Cid);
 static uint8_t SD_GetCSDRegister(SD_CSD* Csd);
 static uint8_t SD_GetDataResponse(void);
@@ -247,6 +250,32 @@ void              SD_IO_Init(void);
 void              SD_IO_CSState(uint8_t state);
 void              SD_IO_WriteReadData(const uint8_t *DataIn, uint8_t *DataOut, uint16_t DataLength);
 uint8_t           SD_IO_WriteByte(uint8_t Data);
+
+
+//  * @brief  Initializes SPI HAL
+static void
+SPIx_Init(void) {
+    if(HAL_SPI_GetState(&hnucleo_Spi) == HAL_SPI_STATE_RESET) {
+        /* SPI Config */
+        hnucleo_Spi.Instance = SD_SPIx;
+        // SPI baudrate is set to 21.0 MHz (APB1/SPI_BaudRatePrescaler = 42/2 = 21.0 MHz)
+        // - SD card SPI interface max baudrate is 25MHz for write/read
+        hnucleo_Spi.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+        hnucleo_Spi.Init.Direction         = SPI_DIRECTION_2LINES;
+        hnucleo_Spi.Init.CLKPhase          = SPI_PHASE_2EDGE;
+        hnucleo_Spi.Init.CLKPolarity       = SPI_POLARITY_HIGH;
+        hnucleo_Spi.Init.CRCCalculation    = SPI_CRCCALCULATION_DISABLED;
+        hnucleo_Spi.Init.CRCPolynomial     = 7;
+        hnucleo_Spi.Init.DataSize          = SPI_DATASIZE_8BIT;
+        hnucleo_Spi.Init.FirstBit          = SPI_FIRSTBIT_MSB;
+        hnucleo_Spi.Init.NSS               = SPI_NSS_SOFT;
+        hnucleo_Spi.Init.TIMode            = SPI_TIMODE_DISABLED;
+        hnucleo_Spi.Init.Mode              = SPI_MODE_MASTER;
+
+        SPIx_MspInit(&hnucleo_Spi);
+        HAL_SPI_Init(&hnucleo_Spi);
+    }
+}
 
 
 //  * @brief  Initializes SPI MSP.
@@ -282,32 +311,6 @@ SPIx_MspInit(SPI_HandleTypeDef *hspi) {
 
     /* Enable SPI clock */
     SD_SPIx_CLK_ENABLE();
-}
-
-
-//  * @brief  Initializes SPI HAL
-static void
-SPIx_Init(void) {
-    if(HAL_SPI_GetState(&hnucleo_Spi) == HAL_SPI_STATE_RESET) {
-        /* SPI Config */
-        hnucleo_Spi.Instance = SD_SPIx;
-        // SPI baudrate is set to 21.0 MHz (APB1/SPI_BaudRatePrescaler = 42/2 = 21.0 MHz)
-        // - SD card SPI interface max baudrate is 25MHz for write/read
-        hnucleo_Spi.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
-        hnucleo_Spi.Init.Direction         = SPI_DIRECTION_2LINES;
-        hnucleo_Spi.Init.CLKPhase          = SPI_PHASE_2EDGE;
-        hnucleo_Spi.Init.CLKPolarity       = SPI_POLARITY_HIGH;
-        hnucleo_Spi.Init.CRCCalculation    = SPI_CRCCALCULATION_DISABLED;
-        hnucleo_Spi.Init.CRCPolynomial     = 7;
-        hnucleo_Spi.Init.DataSize          = SPI_DATASIZE_8BIT;
-        hnucleo_Spi.Init.FirstBit          = SPI_FIRSTBIT_MSB;
-        hnucleo_Spi.Init.NSS               = SPI_NSS_SOFT;
-        hnucleo_Spi.Init.TIMode            = SPI_TIMODE_DISABLED;
-        hnucleo_Spi.Init.Mode              = SPI_MODE_MASTER;
-
-        SPIx_MspInit(&hnucleo_Spi);
-        HAL_SPI_Init(&hnucleo_Spi);
-    }
 }
 
 
