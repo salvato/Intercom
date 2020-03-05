@@ -95,10 +95,8 @@ typedef enum { RF24_CRC_DISABLED = 0,
     uint8_t rf24Enqueue_payload(const void* buf, uint8_t data_len);
     rf24_datarate_e  rf24GetDataRate(void) ;
     rf24_crclength_e rf24GetCRCLength(void);
-    bool isValid() { return ce_pin != 0xff && csn_pin != 0xff; }
 
     uint32_t txDelay;
     uint32_t csDelay;
-    bool isValid() { return ce_pin != 0xff && csn_pin != 0xff; }
 
 #endif // __RF24_H__

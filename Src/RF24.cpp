@@ -16,7 +16,7 @@ static uint8_t read_payload(void* buf, uint8_t len);
 static uint8_t write_payload(const void* buf, uint8_t len, const uint8_t writeType);
 static uint8_t get_status(void);
 static void    print_status(uint8_t status);
-static void    print_observe_tx(uint8_t value);
+//static void    print_observe_tx(uint8_t value);
 static void    print_byte_register(const char* name, uint8_t reg, uint8_t qty = 1);
 static void    print_address_register(const char* name, uint8_t reg, uint8_t qty = 1);
 static void    toggle_features(void);
@@ -24,7 +24,6 @@ static uint8_t spiTrans(uint8_t cmd);
 static void    errNotify(void);
 static void    beginTransaction();
 static void    endTransaction();
-static void    enableGPIOClock(GPIO_TypeDef* port);
 static void    InitPins(uint32_t preempPriority);
 static void    toggle_features(void);
 
@@ -74,7 +73,7 @@ rf24Init(uint8_t channelNumber, uint32_t preempPriority) {
     // Initialize SPI interface
     spi.begin(SPI_MODE_MASTER);
 
-    powerDown();
+    rf24PowerDown();
     ce(GPIO_PIN_RESET);
     csn(GPIO_PIN_SET);
     HAL_Delay(100); // To allow for nRF24L01+ powerup
@@ -131,10 +130,10 @@ rf24Init(uint8_t channelNumber, uint32_t preempPriority) {
         return false;
     dynamic_payloads_enabled = true;
 
-    setRetries(1, 0); // 500 us and Single Retry
+    rf24SetRetries(1, 0); // 500 us and Single Retry
 
     // Reset value is MAX
-    setPALevel(RF24_PA_MAX);
+    rf24SetPALevel(RF24_PA_MAX);
 
     // Get the RF setup to be sure the module is attached and responding
     setup = read_register(RF_SETUP);
@@ -143,21 +142,21 @@ rf24Init(uint8_t channelNumber, uint32_t preempPriority) {
         return false;
 
     // Set the on Air Data Rate
-    setDataRate(RF24_2MBPS);
+    rf24SetDataRate(RF24_2MBPS);
 
-    setChannel(channelNumber);
+    rf24SetChannel(channelNumber);
 
     // Flush FIFO buffers
-    flush_rx();
-    flush_tx();
+    rf24Flush_rx();
+    rf24Flush_tx();
 
     // Power up by default when begin() is called
-    powerUp();
+    rf24PowerUp();
 
     // Clear Interrupt Request...
-    clearInterrupts();
+    rf24ClearInterrupts();
     // Enable hardware interrupts
-    enableIRQ();
+    rf24EnableIRQ();
 
     return true;
 }
@@ -340,7 +339,6 @@ spiTrans(uint8_t cmd){
     return status;
 }
 
-/****************************************************************************/
 
 uint8_t
 get_status(void) {
@@ -365,15 +363,15 @@ print_status(uint8_t status) {
 }
 
 
-void
-print_observe_tx(uint8_t value) {
-    sprintf(buffer,
-            PSTR("OBSERVE_TX=%02x: POLS_CNT=%x ARC_CNT=%x\r\n"),
-            value,
-            (value >> PLOS_CNT) & 0x0F,
-            (value >> ARC_CNT) & 0x0F
-            );
-}
+//void
+//print_observe_tx(uint8_t value) {
+//    sprintf(buffer,
+//            PSTR("OBSERVE_TX=%02x: POLS_CNT=%x ARC_CNT=%x\r\n"),
+//            value,
+//            (value >> PLOS_CNT) & 0x0F,
+//            (value >> ARC_CNT) & 0x0F
+//            );
+//}
 
 
 void
@@ -473,9 +471,9 @@ rf24PrintDetails(void) {
     print_byte_register(PSTR("CONFIG\t"), NRF_CONFIG);
     print_byte_register(PSTR("DYNPD/FEATURE"), DYNPD, 2);
 
-    sprintf(buffer, PSTR("Data Rate\t = " PRIPSTR "\r\n"), pgm_read_ptr(&rf24_datarate_e_str_P[getDataRate()]));
-    sprintf(buffer, PSTR("CRC Length\t = " PRIPSTR "\r\n"), pgm_read_ptr(&rf24_crclength_e_str_P[getCRCLength()]));
-    sprintf(buffer, PSTR("PA Power\t = " PRIPSTR "\r\n"),  pgm_read_ptr(&rf24_pa_dbm_e_str_P[getPALevel()]));
+    sprintf(buffer, PSTR("Data Rate\t = " PRIPSTR "\r\n"), pgm_read_ptr(&rf24_datarate_e_str_P[rf24GetDataRate()]));
+    sprintf(buffer, PSTR("CRC Length\t = " PRIPSTR "\r\n"), pgm_read_ptr(&rf24_crclength_e_str_P[rf24GetCRCLength()]));
+    sprintf(buffer, PSTR("PA Power\t = " PRIPSTR "\r\n"),  pgm_read_ptr(&rf24_pa_dbm_e_str_P[rf24GetPALevel()]));
 }
 
 
@@ -491,7 +489,7 @@ rf24IsChipConnected() {
 
 void
 rf24StartListening(void) {
-    powerUp();
+    rf24PowerUp();
     write_register(NRF_CONFIG, read_register(NRF_CONFIG) | _BV(PRIM_RX));
     write_register(NRF_STATUS, _BV(RX_DR) | _BV(TX_DS) | _BV(MAX_RT) );
     ce(GPIO_PIN_SET);
@@ -500,7 +498,7 @@ rf24StartListening(void) {
         write_register(RX_ADDR_P0, pipe0_reading_address, addr_width);
     }
     else {
-        closeReadingPipe(0);
+        rf24CloseReadingPipe(0);
     }
     // Flush buffers
     //flush_rx();
@@ -563,7 +561,7 @@ errNotify() {
 bool
 rf24Write( const void* buf, uint8_t len, const bool multicast ) {
     //Start Writing
-    startFastWrite(buf, len, multicast);
+    rf24StartFastWrite(buf, len, multicast);
     //Wait until complete or failed
     uint32_t timer = HAL_GetTick();
     while(!(get_status()  & (_BV(TX_DS) | _BV(MAX_RT)))) {
@@ -600,7 +598,7 @@ rf24WriteBlocking( const void* buf, uint8_t len, uint32_t timeout ) {
     uint32_t timer = HAL_GetTick();							  //Get the time that the payload transmission started
     while( ( get_status()  & ( _BV(TX_FULL) ))) {		  //Blocking only if FIFO is full. This will loop and block until TX is successful or timeout
         if( get_status() & _BV(MAX_RT)){					  //If MAX Retries have been reached
-            reUseTX();										  //Set re-transmit and clear the MAX_RT interrupt flag
+            rf24ReUseTX();										  //Set re-transmit and clear the MAX_RT interrupt flag
             if(HAL_GetTick() - timer > timeout){ return 0; }		  //If this payload has exceeded the user-defined timeout, exit and return 0
         }
         if(HAL_GetTick() - timer > (timeout+95) ){
