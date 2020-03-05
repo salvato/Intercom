@@ -83,6 +83,7 @@ void delayMicroseconds(uint32_t us);
 
 extern I2S_HandleTypeDef hAudioOutI2s;
 extern I2S_HandleTypeDef hAudioInI2s;
+extern SPI_HandleTypeDef hnucleo_Spi;
 
 #ifdef __cplusplus
 }

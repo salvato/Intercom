@@ -119,26 +119,26 @@
 
 #define FS_READNONLY 1
 
-#define SD_SPIx                                     SPI2
-#define SD_SPIx_CLK_ENABLE()                        __HAL_RCC_SPI2_CLK_ENABLE()
+#define SD_SPIx                                 SPI2
+#define SD_SPIx_CLK_ENABLE()                    __HAL_RCC_SPI2_CLK_ENABLE()
 
-#define SD_SPIx_SCK_AF                              GPIO_AF5_SPI2
-#define SD_SPIx_SCK_GPIO_PORT                       GPIOB
-#define SD_SPIx_SCK_PIN                             GPIO_PIN_13
-#define SD_SPIx_SCK_GPIO_CLK_ENABLE()               __HAL_RCC_GPIOB_CLK_ENABLE()
-#define SD_SPIx_SCK_GPIO_CLK_DISABLE()              __HAL_RCC_GPIOB_CLK_DISABLE()
+#define SD_SPIx_SCK_AF                          GPIO_AF5_SPI2
+#define SD_SPIx_SCK_GPIO_PORT                   GPIOB
+#define SD_SPIx_SCK_PIN                         GPIO_PIN_13
+#define SD_SPIx_SCK_GPIO_CLK_ENABLE()           __HAL_RCC_GPIOB_CLK_ENABLE()
+#define SD_SPIx_SCK_GPIO_CLK_DISABLE()          __HAL_RCC_GPIOB_CLK_DISABLE()
 
-#define SD_SPIx_MISO_AF                             GPIO_AF5_SPI2
-#define SD_SPIx_MISO_GPIO_PORT                      GPIOC
-#define SD_SPIx_MISO_PIN                            GPIO_PIN_2
-#define SD_SPIx_MISO_GPIO_CLK_ENABLE()              __HAL_RCC_GPIOC_CLK_ENABLE()
-#define SD_SPIx_MISO_GPIO_CLK_DISABLE()             __HAL_RCC_GPIOC_CLK_DISABLE()
+#define SD_SPIx_MISO_AF                         GPIO_AF5_SPI2
+#define SD_SPIx_MISO_GPIO_PORT                  GPIOC
+#define SD_SPIx_MISO_PIN                        GPIO_PIN_2
+#define SD_SPIx_MISO_GPIO_CLK_ENABLE()          __HAL_RCC_GPIOC_CLK_ENABLE()
+#define SD_SPIx_MISO_GPIO_CLK_DISABLE()         __HAL_RCC_GPIOC_CLK_DISABLE()
 
-#define SD_SPIx_MOSI_AF                             GPIO_AF5_SPI2
-#define SD_SPIx_MOSI_GPIO_PORT                      GPIOB
-#define SD_SPIx_MOSI_PIN                            GPIO_PIN_15
-#define SD_SPIx_MOSI_GPIO_CLK_ENABLE()              __HAL_RCC_GPIOC_CLK_ENABLE()
-#define SD_SPIx_MOSI_GPIO_CLK_DISABLE()             __HAL_RCC_GPIOC_CLK_DISABLE()
+#define SD_SPIx_MOSI_AF                         GPIO_AF5_SPI2
+#define SD_SPIx_MOSI_GPIO_PORT                  GPIOB
+#define SD_SPIx_MOSI_PIN                        GPIO_PIN_15
+#define SD_SPIx_MOSI_GPIO_CLK_ENABLE()          __HAL_RCC_GPIOC_CLK_ENABLE()
+#define SD_SPIx_MOSI_GPIO_CLK_DISABLE()         __HAL_RCC_GPIOC_CLK_DISABLE()
 
 
 // Maximum Timeout values for flags waiting loops. These timeouts are not based
@@ -156,15 +156,6 @@
 #define SD_CS_GPIO_CLK_DISABLE()                __HAL_RCC_GPIOB_CLK_DISABLE()
 
 
-typedef struct {
-    uint8_t r1;
-    uint8_t r2;
-    uint8_t r3;
-    uint8_t r4;
-    uint8_t r5;
-} SD_CmdAnswer_typedef;
-
-
 #define SD_DUMMY_BYTE            0xFF
 
 #define SD_MAX_FRAME_LENGTH        17    /* Lenght = 16 + 1 */
@@ -174,17 +165,6 @@ typedef struct {
 
 #define SD_CSD_STRUCT_V1          0x2    /* CSD struct version V1 */
 #define SD_CSD_STRUCT_V2          0x1    /* CSD struct version V2 */
-
-
-//  * @brief  SD answer format
-typedef enum {
-    SD_ANSWER_R1_EXPECTED,
-    SD_ANSWER_R1B_EXPECTED,
-    SD_ANSWER_R2_EXPECTED,
-    SD_ANSWER_R3_EXPECTED,
-    SD_ANSWER_R4R5_EXPECTED,
-    SD_ANSWER_R7_EXPECTED,
-} SD_Answer_type;
 
 
 //  * @brief  Start Data tokens:
@@ -227,38 +207,6 @@ typedef enum {
 #define SD_CMD_READ_OCR               58  /* CMD55 = 0x79 */
 
 
-//  * @brief  SD reponses and error flags
-typedef enum
-{
-    // R1 answer value
-    SD_R1_NO_ERROR            = (0x00),
-    SD_R1_IN_IDLE_STATE       = (0x01),
-    SD_R1_ERASE_RESET         = (0x02),
-    SD_R1_ILLEGAL_COMMAND     = (0x04),
-    SD_R1_COM_CRC_ERROR       = (0x08),
-    SD_R1_ERASE_SEQUENCE_ERROR= (0x10),
-    SD_R1_ADDRESS_ERROR       = (0x20),
-    SD_R1_PARAMETER_ERROR     = (0x40),
-
-    // R2 answer value
-    SD_R2_NO_ERROR            = 0x00,
-    SD_R2_CARD_LOCKED         = 0x01,
-    SD_R2_LOCKUNLOCK_ERROR    = 0x02,
-    SD_R2_ERROR               = 0x04,
-    SD_R2_CC_ERROR            = 0x08,
-    SD_R2_CARD_ECC_FAILED     = 0x10,
-    SD_R2_WP_VIOLATION        = 0x20,
-    SD_R2_ERASE_PARAM         = 0x40,
-    SD_R2_OUTOFRANGE          = 0x80,
-
-    // Data response error
-    SD_DATA_OK                = (0x05),
-    SD_DATA_CRC_ERROR         = (0x0B),
-    SD_DATA_WRITE_ERROR       = (0x0D),
-    SD_DATA_OTHER_ERROR       = (0xFF)
-} SD_Error;
-
-
 //  * @brief  SD Control Lines management
 #define SD_CS_LOW()       HAL_GPIO_WritePin(SD_CS_GPIO_PORT, SD_CS_PIN, GPIO_PIN_RESET)
 #define SD_CS_HIGH()      HAL_GPIO_WritePin(SD_CS_GPIO_PORT, SD_CS_PIN, GPIO_PIN_SET)
@@ -276,7 +224,7 @@ uint16_t flag_SDHC = 0;
 
 // Private function prototypes
 static uint32_t SpixTimeout = SD_SPIx_TIMEOUT_MAX; /*<! Value of Timeout when SPI communication fails */
-static SPI_HandleTypeDef hnucleo_Spi;
+SPI_HandleTypeDef hnucleo_Spi;
 
 static uint8_t SD_GetCIDRegister(SD_CID* Cid);
 static uint8_t SD_GetCSDRegister(SD_CSD* Csd);
@@ -343,7 +291,7 @@ SPIx_Init(void) {
     if(HAL_SPI_GetState(&hnucleo_Spi) == HAL_SPI_STATE_RESET) {
         /* SPI Config */
         hnucleo_Spi.Instance = SD_SPIx;
-        // SPI baudrate is set to 10,5 MHz (APB1/SPI_BaudRatePrescaler = 42/2 = 21.0 MHz)
+        // SPI baudrate is set to 21.0 MHz (APB1/SPI_BaudRatePrescaler = 42/2 = 21.0 MHz)
         // - SD card SPI interface max baudrate is 25MHz for write/read
         hnucleo_Spi.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
         hnucleo_Spi.Init.Direction         = SPI_DIRECTION_2LINES;
@@ -370,9 +318,7 @@ SPIx_Init(void) {
 static void
 SPIx_WriteReadData(const uint8_t *DataIn, uint8_t *DataOut, uint16_t DataLegnth) {
     HAL_StatusTypeDef status = HAL_OK;
-
     status = HAL_SPI_TransmitReceive(&hnucleo_Spi, (uint8_t*) DataIn, DataOut, DataLegnth, SpixTimeout);
-
     /* Check the communication status */
     if(status != HAL_OK) {
         /* Execute user timeout callback */
@@ -405,7 +351,6 @@ static void
 SPIx_Error (void) {
     /* De-initialize the SPI communication BUS */
     HAL_SPI_DeInit(&hnucleo_Spi);
-
     /* Re-Initiaize the SPI communication BUS */
     SPIx_Init();
 }
@@ -429,7 +374,6 @@ SD_IO_Init(void) {
     HAL_GPIO_Init(SD_CS_GPIO_PORT, &GPIO_InitStruct);
 
     /*------------Put SD in SPI mode--------------*/
-
     SPIx_Init();/* SD SPI Config */
 
     /* Send dummy byte 0xFF, 10 times with CS high: Rise CS and MOSI for 80 clocks cycles */
@@ -486,10 +430,8 @@ uint8_t
 BSP_SD_Init(void) {
     // Configure IO functionalities for SD pin
     SD_IO_Init();
-
     // SD detection pin is not physically mapped on the Adafruit shield
     SdStatus = SD_PRESENT;
-
     // SD initialized and set to SPI mode properly
     return SD_GoIdleState();
 }
