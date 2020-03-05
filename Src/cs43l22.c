@@ -47,8 +47,9 @@
 // #define VERIFY_WRITTENDATA
 #endif // VERIFY_WRITTENDATA
 
-
+//--------------------------
 // CS43L22_Private_Variables
+//--------------------------
 
 // Audio codec driver structure initialization
 AUDIO_DrvTypeDef cs43l22_drv = 
@@ -73,12 +74,15 @@ static uint8_t Is_cs43l22_Stop = 1;
 
 volatile uint8_t OutputDev = 0;
 
+//----------------------------
 // CS43L22_Function_Prototypes
+//----------------------------
 static uint8_t CODEC_IO_Write(uint8_t Addr, uint8_t Reg, uint8_t Value);
 
 
+//--------------------------
 // CS43L22_Private_Functions
-
+//--------------------------
 
 //  * @brief Initializes the audio codec and the control interface.
 //  * @param DeviceAddr: Device address on communication Bus.
@@ -91,13 +95,13 @@ cs43l22_Init(uint16_t DeviceAddr, uint16_t OutputDevice, uint8_t Volume, uint32_
     (void)AudioFreq;
     uint32_t counter = 0;
 
-    /* Initialize the Control interface of the Audio Codec */
+    // Initialize the Control interface of the Audio Codec
     AUDIO_IO_Init();
     
-    /* Keep Codec powered OFF */
+    // Keep Codec powered OFF
     counter += CODEC_IO_Write(DeviceAddr, CS43L22_REG_POWER_CTL1, 0x01);
 
-    /*Save Output device for mute ON/OFF procedure*/
+    // Save Output device for mute ON/OFF procedure
     switch (OutputDevice) {
         case OUTPUT_DEVICE_SPEAKER:
             OutputDev = 0xFA;
@@ -122,21 +126,20 @@ cs43l22_Init(uint16_t DeviceAddr, uint16_t OutputDevice, uint8_t Volume, uint32_
 
     counter += CODEC_IO_Write(DeviceAddr, CS43L22_REG_POWER_CTL2, OutputDev);
 
-    /* Clock configuration: Auto detection */
+    // Clock configuration: Auto detection
     counter += CODEC_IO_Write(DeviceAddr, CS43L22_REG_CLOCKING_CTL, 0x81);
 
-    /* Set the Slave Mode and the audio Standard */
+    // Set the Slave Mode and the audio Standard
     counter += CODEC_IO_Write(DeviceAddr, CS43L22_REG_INTERFACE_CTL1, CODEC_STANDARD);
 
-    /* Set the Master volume */
+    // Set the Master volume
     counter += cs43l22_SetVolume(DeviceAddr, Volume);
 
-    /* If the Speaker is enabled, set the Mono mode and volume attenuation level */
+    // If the Speaker is enabled, set the Mono mode and volume attenuation level
     if(OutputDevice != OUTPUT_DEVICE_HEADPHONE) {
-        /* Set the Speaker Mono mode */
+        // Set the Speaker Mono mode
         counter += CODEC_IO_Write(DeviceAddr, CS43L22_REG_PLAYBACK_CTL2, 0x06);
-
-        /* Set the Speaker attenuation level */
+        // Set the Speaker attenuation level
         counter += CODEC_IO_Write(DeviceAddr, CS43L22_REG_SPEAKER_A_VOL, 0x00);
         counter += CODEC_IO_Write(DeviceAddr, CS43L22_REG_SPEAKER_B_VOL, 0x00);
     }
@@ -148,19 +151,19 @@ cs43l22_Init(uint16_t DeviceAddr, uint16_t OutputDevice, uint8_t Volume, uint32_
     // If this delay is not inserted, then the codec will not shut down properly and
     // it results in high noise after shut down.
 
-    /* Disable the analog soft ramp */
+    // Disable the analog soft ramp
     counter += CODEC_IO_Write(DeviceAddr, CS43L22_REG_ANALOG_ZC_SR_SETT, 0x00);
-    /* Disable the digital soft ramp */
+    // Disable the digital soft ramp
     counter += CODEC_IO_Write(DeviceAddr, CS43L22_REG_MISC_CTL, 0x04);
-    /* Disable the limiter attack level */
+    // Disable the limiter attack level
     counter += CODEC_IO_Write(DeviceAddr, CS43L22_REG_LIMIT_CTL1, 0x00);
-    /* Adjust Bass and Treble levels */
+    // Adjust Bass and Treble levels
     counter += CODEC_IO_Write(DeviceAddr, CS43L22_REG_TONE_CTL, 0x0F);
-    /* Adjust PCM volume level */
+    // Adjust PCM volume level
     counter += CODEC_IO_Write(DeviceAddr, CS43L22_REG_PCMA_VOL, 0x0A);
     counter += CODEC_IO_Write(DeviceAddr, CS43L22_REG_PCMB_VOL, 0x0A);
 
-    /* Return communication control value */
+    // Return communication control value
     return counter;
 }
 

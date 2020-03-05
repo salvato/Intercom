@@ -641,8 +641,8 @@ AUDIO_IO_Init(void) {
     AUDIO_RESET_GPIO_CLK_ENABLE();
 
     /* Audio reset pin configuration */
-    GPIO_InitStruct.Pin = AUDIO_RESET_PIN;
-    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pin   = AUDIO_RESET_PIN;
+    GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStruct.Speed = GPIO_SPEED_FAST;
     GPIO_InitStruct.Pull  = GPIO_NOPULL;
     HAL_GPIO_Init(AUDIO_RESET_GPIO, &GPIO_InitStruct);
