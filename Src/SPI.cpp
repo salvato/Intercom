@@ -26,12 +26,11 @@ static uint32_t spiGetPrescalerFromMaxFrequency(uint32_t MAX_SPI_Frequency);
 
 
 void
-HAL_SPI_MspInit(SPI_HandleTypeDef *hspi) {
-    UNUSED(hspi);
+spiGpioInit() {
     GPIO_InitTypeDef  GPIO_InitStruct;
     memset(&GPIO_InitStruct, 0, sizeof(GPIO_InitStruct));
 
-    // Enable GPIO TX/RX clock
+    // Enable GPIO clock
     __HAL_RCC_GPIOA_CLK_ENABLE();
 
     // SPI SCK GPIO pin configuration
@@ -63,8 +62,7 @@ HAL_SPI_MspInit(SPI_HandleTypeDef *hspi) {
 
 
 void
-HAL_SPI_MspDeInit(SPI_HandleTypeDef *hspi) {
-    UNUSED(hspi);
+spiGpioDeInit() {
     // Reset peripherals
     __HAL_RCC_SPI1_FORCE_RESET();
     __HAL_RCC_SPI1_RELEASE_RESET();
@@ -92,6 +90,7 @@ void
 spiInit(uint32_t mode) {
     __HAL_RCC_SPI1_FORCE_RESET();
     __HAL_RCC_SPI1_RELEASE_RESET();
+    spiGpioInit();
     memset(&SpiHandle, 0, sizeof(SpiHandle));
     SpiHandle.Instance               = SPI1;
     SpiHandle.Init.BaudRatePrescaler = spiGetPrescalerFromMaxFrequency(3000000);
