@@ -129,6 +129,7 @@ b) RECORD A FILE:
 ==============================================================================*/
 
 /* Includes ------------------------------------------------------------------*/
+#include "string.h"
 #include "stm32f4_discovery_audio.h"
 
 /** @addtogroup BSP
@@ -693,6 +694,8 @@ uint8_t
 BSP_AUDIO_IN_Init(uint32_t AudioFreq, uint32_t BitRes, uint32_t ChnlNbr) {
     UNUSED(BitRes);
 
+    __HAL_I2S_RESET_HANDLE_STATE(&hAudioInI2s);
+
     /* Configure PLL clock */
     BSP_AUDIO_IN_ClockConfig(&hAudioInI2s, AudioFreq, NULL);
 
@@ -703,10 +706,8 @@ BSP_AUDIO_IN_Init(uint32_t AudioFreq, uint32_t BitRes, uint32_t ChnlNbr) {
 
     /* Configure the I2S peripheral */
     hAudioInI2s.Instance = I2S2;
-    if(HAL_I2S_GetState(&hAudioInI2s) == HAL_I2S_STATE_RESET) {
-        /* Initialize the I2S Msp: this __weak function can be rewritten by the application */
-        BSP_AUDIO_IN_MspInit(&hAudioInI2s, NULL);
-    }
+    /* Initialize the I2S Msp: this __weak function can be rewritten by the application */
+    BSP_AUDIO_IN_MspInit(&hAudioInI2s, NULL);
 
     /* Configure the I2S2 */
     I2S2_Init(AudioFreq);

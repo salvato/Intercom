@@ -31,7 +31,7 @@
 // RF modules support 10 Mhz SPI bus speed
 const uint32_t RF24_SPI_SPEED = 10000000;
 
-#include <SPI.h>
+#include <radioSPI.h>
 
 
 // Define _BV for non-Arduino platforms and for Arduino DUE

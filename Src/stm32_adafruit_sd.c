@@ -238,12 +238,12 @@ static uint8_t SD_WaitData(uint8_t data);
 static uint8_t SD_ReadData(void);
 
 static void       SPIx_Init(void);
+static void       spi2GpioInit();
 #ifndef FS_READNONLY
 static void       SPIx_Write(uint8_t Value);
 #endif
 static void       SPIx_WriteReadData(const uint8_t *DataIn, uint8_t *DataOut, uint16_t DataLegnth);
 static void       SPIx_Error(void);
-static void       SPIx_MspInit(SPI_HandleTypeDef *hspi);
 
 /* SD IO functions */
 void              SD_IO_Init(void);
@@ -255,33 +255,32 @@ uint8_t           SD_IO_WriteByte(uint8_t Data);
 //  * @brief  Initializes SPI HAL
 static void
 SPIx_Init(void) {
-    if(HAL_SPI_GetState(&hnucleo_Spi) == HAL_SPI_STATE_RESET) {
-        /* SPI Config */
-        hnucleo_Spi.Instance = SD_SPIx;
-        // SPI baudrate is set to 21.0 MHz (APB1/SPI_BaudRatePrescaler = 42/2 = 21.0 MHz)
-        // - SD card SPI interface max baudrate is 25MHz for write/read
-        hnucleo_Spi.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
-        hnucleo_Spi.Init.Direction         = SPI_DIRECTION_2LINES;
-        hnucleo_Spi.Init.CLKPhase          = SPI_PHASE_2EDGE;
-        hnucleo_Spi.Init.CLKPolarity       = SPI_POLARITY_HIGH;
-        hnucleo_Spi.Init.CRCCalculation    = SPI_CRCCALCULATION_DISABLED;
-        hnucleo_Spi.Init.CRCPolynomial     = 7;
-        hnucleo_Spi.Init.DataSize          = SPI_DATASIZE_8BIT;
-        hnucleo_Spi.Init.FirstBit          = SPI_FIRSTBIT_MSB;
-        hnucleo_Spi.Init.NSS               = SPI_NSS_SOFT;
-        hnucleo_Spi.Init.TIMode            = SPI_TIMODE_DISABLED;
-        hnucleo_Spi.Init.Mode              = SPI_MODE_MASTER;
+    __HAL_RCC_SPI2_FORCE_RESET();
+    __HAL_RCC_SPI2_RELEASE_RESET();
+    memset(&hnucleo_Spi, 0, sizeof(hnucleo_Spi));
+    hnucleo_Spi.Instance = SD_SPIx;
+    // SPI baudrate is set to 21.0 MHz (APB1/SPI_BaudRatePrescaler = 42/2 = 21.0 MHz)
+    // - SD card SPI interface max baudrate is 25MHz for write/read
+    hnucleo_Spi.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+    hnucleo_Spi.Init.Direction         = SPI_DIRECTION_2LINES;
+    hnucleo_Spi.Init.CLKPhase          = SPI_PHASE_2EDGE;
+    hnucleo_Spi.Init.CLKPolarity       = SPI_POLARITY_HIGH;
+    hnucleo_Spi.Init.CRCCalculation    = SPI_CRCCALCULATION_DISABLED;
+    hnucleo_Spi.Init.CRCPolynomial     = 7;
+    hnucleo_Spi.Init.DataSize          = SPI_DATASIZE_8BIT;
+    hnucleo_Spi.Init.FirstBit          = SPI_FIRSTBIT_MSB;
+    hnucleo_Spi.Init.NSS               = SPI_NSS_SOFT;
+    hnucleo_Spi.Init.TIMode            = SPI_TIMODE_DISABLED;
+    hnucleo_Spi.Init.Mode              = SPI_MODE_MASTER;
 
-        SPIx_MspInit(&hnucleo_Spi);
-        HAL_SPI_Init(&hnucleo_Spi);
-    }
+    spi2GpioInit(&hnucleo_Spi);
+    HAL_SPI_Init(&hnucleo_Spi);
 }
 
 
 //  * @brief  Initializes SPI MSP.
 static void
-SPIx_MspInit(SPI_HandleTypeDef *hspi) {
-    (void)hspi;
+spi2GpioInit() {
     GPIO_InitTypeDef  GPIO_InitStruct;
 
     /*** Configure the GPIOs ***/
@@ -312,6 +311,21 @@ SPIx_MspInit(SPI_HandleTypeDef *hspi) {
     /* Enable SPI clock */
     SD_SPIx_CLK_ENABLE();
 }
+
+
+void
+spi2GpioDeInit() {
+    // Reset peripherals
+    __HAL_RCC_SPI2_FORCE_RESET();
+    __HAL_RCC_SPI2_RELEASE_RESET();
+    // Disable peripherals and GPIO Clocks
+    HAL_GPIO_DeInit(SD_SPIx_SCK_GPIO_PORT, SD_SPIx_SCK_PIN);
+    HAL_GPIO_DeInit(SD_SPIx_MISO_GPIO_PORT, SD_SPIx_MISO_PIN);
+    HAL_GPIO_DeInit(SD_SPIx_MOSI_GPIO_PORT, SD_SPIx_MOSI_PIN);
+    // Disable the NVIC for SPI
+//    HAL_NVIC_DisableIRQ(SPIx_IRQn);
+}
+
 
 
 //  * @brief  SPI Write a byte to device

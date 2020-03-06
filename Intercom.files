@@ -73,8 +73,6 @@ HAL/stm32f4xx_hal_tim.c
 HAL/stm32f4xx_hal_tim_ex.c
 Inc/RF24.h
 Inc/RF24_config.h
-Inc/SPI.h
-Inc/SPI_copy.h
 Inc/audio.h
 Inc/cmsis_compiler.h
 Inc/cmsis_gcc.h
@@ -88,6 +86,7 @@ Inc/mpu_armv7.h
 Inc/nRF24L01.h
 Inc/pdm2pcm_glo.h
 Inc/printf.h
+Inc/radioSPI.h
 Inc/sd_diskio.h
 Inc/stm32_adafruit_sd.h
 Inc/stm32_hal_legacy.h
@@ -126,10 +125,9 @@ Makefile
 STM32F407VGTx_FLASH.ld
 Src/RF24.cpp
 Src/RF24old.cpp
-Src/SPI.cpp
-Src/SPI_copy.cpp
 Src/cs43l22.c
 Src/main.cpp
+Src/radioSPI.cpp
 Src/sd_diskio.c
 Src/stm32_adafruit_sd.c
 Src/stm32f4_discovery.c

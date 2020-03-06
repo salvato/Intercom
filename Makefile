@@ -55,7 +55,7 @@ HAL/Src/stm32f4xx_hal_spi.c\
 # C++ sources
 CXX_SOURCES =  \
 Src/main.cpp \
-Src/SPI.cpp \
+Src/radioSPI.cpp \
 Src/RF24.cpp \
 
 # ASM sources
