@@ -28,6 +28,18 @@ static void    InitPins(uint32_t preempPriority);
 static void    toggle_features(void);
 
 
+static __IO     bool bBusy;
+static SPI      spi;
+static uint16_t spi_speed;                /**< SPI Bus Speed */
+static uint8_t  payload_size;             /**< Fixed size of payloads */
+static bool     dynamic_payloads_enabled; /**< Whether dynamic payloads are enabled. */
+static uint8_t  pipe0_reading_address[5]; /**< Last address set on pipe 0 for reading. */
+static uint8_t  addr_width;               /**< The address width to use - 3,4 or 5 bytes. */
+static bool     failureDetected;
+static uint32_t txDelay;
+static uint32_t csDelay;
+
+
 void
 InitPins(uint32_t preempPriority) {
     GPIO_InitTypeDef GPIO_InitStructure;

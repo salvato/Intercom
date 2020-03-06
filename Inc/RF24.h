@@ -26,17 +26,6 @@ typedef enum { RF24_CRC_DISABLED = 0,
  * Driver for nRF24L01(+) 2.4GHz Wireless Transceiver
  */
 
-    SPI spi;
-
-    __IO bool bBusy;
-
-    uint16_t spi_speed;               /**< SPI Bus Speed */
-    uint8_t payload_size;             /**< Fixed size of payloads */
-    bool dynamic_payloads_enabled;    /**< Whether dynamic payloads are enabled. */
-    uint8_t pipe0_reading_address[5]; /**< Last address set on pipe 0 for reading. */
-    uint8_t addr_width;               /**< The address width to use - 3,4 or 5 bytes. */
-    bool failureDetected;
-
 
     bool    rf24Init(uint8_t channelNumber, uint32_t preempPriority);
     void    rf24EnableIRQ();
@@ -95,8 +84,5 @@ typedef enum { RF24_CRC_DISABLED = 0,
     uint8_t rf24Enqueue_payload(const void* buf, uint8_t data_len);
     rf24_datarate_e  rf24GetDataRate(void) ;
     rf24_crclength_e rf24GetCRCLength(void);
-
-    uint32_t txDelay;
-    uint32_t csDelay;
 
 #endif // __RF24_H__
