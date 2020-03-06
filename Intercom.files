@@ -74,6 +74,7 @@ HAL/stm32f4xx_hal_tim_ex.c
 Inc/RF24.h
 Inc/RF24_config.h
 Inc/SPI.h
+Inc/SPI_copy.h
 Inc/audio.h
 Inc/cmsis_compiler.h
 Inc/cmsis_gcc.h
@@ -126,6 +127,7 @@ STM32F407VGTx_FLASH.ld
 Src/RF24.cpp
 Src/RF24old.cpp
 Src/SPI.cpp
+Src/SPI_copy.cpp
 Src/cs43l22.c
 Src/main.cpp
 Src/sd_diskio.c

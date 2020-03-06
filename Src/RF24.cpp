@@ -5,7 +5,6 @@
 #include "RF24.h"
 
 
-//private:
 static void    csn(GPIO_PinState level);
 static void    ce(GPIO_PinState level);
 static uint8_t read_register(uint8_t reg, uint8_t* buf, uint8_t len);
@@ -29,8 +28,7 @@ static void    toggle_features(void);
 
 
 static __IO     bool bBusy;
-static SPI      spi;
-static uint16_t spi_speed;                /**< SPI Bus Speed */
+//static uint16_t spi_speed;                /**< SPI Bus Speed */
 static uint8_t  payload_size;             /**< Fixed size of payloads */
 static bool     dynamic_payloads_enabled; /**< Whether dynamic payloads are enabled. */
 static uint8_t  pipe0_reading_address[5]; /**< Last address set on pipe 0 for reading. */
@@ -83,7 +81,7 @@ rf24Init(uint8_t channelNumber, uint32_t preempPriority) {
     // Initialize pins
     InitPins(preempPriority);
     // Initialize SPI interface
-    spi.begin(SPI_MODE_MASTER);
+    spiInit(SPI_MODE_MASTER);
 
     rf24PowerDown();
     ce(GPIO_PIN_RESET);
@@ -222,9 +220,9 @@ uint8_t
 read_register(uint8_t reg, uint8_t* buf, uint8_t len) {
     uint8_t status;
     beginTransaction();
-    status = spi.transfer( R_REGISTER | ( REGISTER_MASK & reg ) );
+    status = spiTransfer( R_REGISTER | ( REGISTER_MASK & reg ) );
     while ( len-- ){
-        *buf++ = spi.transfer(0xff);
+        *buf++ = spiTransfer(0xff);
     }
     endTransaction();
     return status;
@@ -235,8 +233,8 @@ uint8_t
 read_register(uint8_t reg) {
     uint8_t result = 0;
     beginTransaction();
-    spi.transfer( R_REGISTER | ( REGISTER_MASK & reg ) );
-    result = spi.transfer(0xff);
+    spiTransfer( R_REGISTER | ( REGISTER_MASK & reg ) );
+    result = spiTransfer(0xff);
     endTransaction();
     return result;
 }
@@ -246,9 +244,9 @@ uint8_t
 write_register(uint8_t reg, const uint8_t* buf, uint8_t len) {
     uint8_t status;
     beginTransaction();
-    status = spi.transfer( W_REGISTER | ( REGISTER_MASK & reg ) );
+    status = spiTransfer( W_REGISTER | ( REGISTER_MASK & reg ) );
     while ( len-- )
-        spi.transfer(*buf++);
+        spiTransfer(*buf++);
     endTransaction();
     return status;
 }
@@ -259,8 +257,8 @@ write_register(uint8_t reg, uint8_t value) {
     uint8_t status = 0;
     IF_SERIAL_DEBUG(printf_P(PSTR("write_register(%02x,%02x)\r\n"),reg,value));
     beginTransaction();
-    status = spi.transfer( W_REGISTER | ( REGISTER_MASK & reg ) );
-    spi.transfer(value);
+    status = spiTransfer( W_REGISTER | ( REGISTER_MASK & reg ) );
+    spiTransfer(value);
     endTransaction();
     return status;
 }
@@ -280,10 +278,10 @@ rf24Enqueue_payload(const void* buf, uint8_t data_len) {
 
     // Each command must be started wit a HIGH to LOW transition of CSN
     beginTransaction(); // csn(GPIO_PIN_RESET)
-    status = spi.transfer(W_TX_PAYLOAD);
-    spi.transfer((void *)current, data_len);
+    status = spiTransfer(W_TX_PAYLOAD);
+    spiTransfer((void *)current, data_len);
     while(blank_len--) {
-        spi.transfer(0);
+        spiTransfer(0);
     }
     endTransaction(); // csn(GPIO_PIN_SET)
     return status;
@@ -300,12 +298,12 @@ write_payload(const void* buf, uint8_t data_len, const uint8_t writeType) {
     IF_SERIAL_DEBUG( printf("[Writing %u bytes %u blanks]\n",data_len,blank_len); );
 
     beginTransaction(); // csn(GPIO_PIN_RESET)
-    status = spi.transfer(writeType);
+    status = spiTransfer(writeType);
     while(data_len--) {
-        spi.transfer(*current++);
+        spiTransfer(*current++);
     }
     while(blank_len--) {
-        spi.transfer(0);
+        spiTransfer(0);
     }
     endTransaction(); // csn(GPIO_PIN_SET)
     return status;
@@ -321,10 +319,10 @@ read_payload(void* buf, uint8_t data_len) {
 
     IF_SERIAL_DEBUG( printf("[Reading %u bytes %u blanks]\n",data_len,blank_len); );
     beginTransaction();
-    status = spi.transfer(R_RX_PAYLOAD);
-    spi.transfer(current, data_len);
+    status = spiTransfer(R_RX_PAYLOAD);
+    spiTransfer(current, data_len);
     if(blank_len)
-        spi.transfer(current+data_len, blank_len);
+        spiTransfer(current+data_len, blank_len);
     endTransaction();
     return status;
 }
@@ -346,7 +344,7 @@ uint8_t
 spiTrans(uint8_t cmd){
     uint8_t status;
     beginTransaction();
-    status = spi.transfer(cmd);
+    status = spiTransfer(cmd);
     endTransaction();
     return status;
 }
@@ -755,8 +753,8 @@ uint8_t
 rf24GetDynamicPayloadSize(void) {
     uint8_t result = 0;
     beginTransaction();
-    spi.transfer( R_RX_PL_WID );
-    result = spi.transfer(0xff);
+    spiTransfer( R_RX_PL_WID );
+    result = spiTransfer(0xff);
     endTransaction();
     if(result > 32) {
         rf24Flush_rx();
@@ -877,8 +875,8 @@ rf24CloseReadingPipe( uint8_t pipe ) {
 void
 toggle_features(void) {
     beginTransaction();
-    spi.transfer(ACTIVATE);
-    spi.transfer(0x73);
+    spiTransfer(ACTIVATE);
+    spiTransfer(0x73);
 	endTransaction();
 }
 
@@ -947,13 +945,13 @@ rf24WriteAckPayload(uint8_t pipe, const void* buf, uint8_t len) {
     uint8_t data_len = rf24_min(len, 32);
     uint8_t status;
     beginTransaction();
-    status = spi.transfer(W_ACK_PAYLOAD | (pipe & 0x07));
+    status = spiTransfer(W_ACK_PAYLOAD | (pipe & 0x07));
     if(status & _BV(TX_FULL)) {
         endTransaction();
         return;
     }
     while(data_len--)
-        spi.transfer(*current++);
+        spiTransfer(*current++);
     endTransaction();
 }
 
