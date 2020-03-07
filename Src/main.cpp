@@ -1,5 +1,6 @@
 ﻿#include "main.h"
 #include "RF24.h"
+#include "sdSPI.h"
 #include "printf.h"
 #include "string.h"
 #include "stdlib.h"
@@ -95,6 +96,8 @@ static void processBase();
 static void processRemote();
 static void processReceivedCommand(uint8_t command, uint8_t sourcePipe);
 static void sendCommand(uint8_t command);
+static void init_SD_IO(void);
+static void deinit_SD_IO(void);
 static bool prepareFileSystem();
 static bool closeFileSystem();
 static void startAlarm();
@@ -416,7 +419,7 @@ connectRemote() {
                             rf24WriteAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
                             BSP_LED_Off(LED_BLUE);
                             bRemoteConnected = true;
-                            HAL_Delay(150); // Give time to send the Ack and to
+                            HAL_Delay(250); // Give time to send the Ack and to
                                             // convert the Base into PRX mode
                         }
                     }
@@ -660,14 +663,10 @@ sendCommand(uint8_t command) {
     HAL_Delay(150);
 }
 
-/*
 
-//  * @brief  Initializes the SD Card and put it into StandBy State
-//  *         (Ready for data transfer).
 void
-SD_IO_Init(void) {
+init_SD_IO(void) {
     GPIO_InitTypeDef  GPIO_InitStruct;
-    uint8_t counter;
 
     // SD_CS_GPIO Periph clock enable
     SD_CS_GPIO_CLK_ENABLE();
@@ -679,19 +678,39 @@ SD_IO_Init(void) {
     GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
     HAL_GPIO_Init(SD_CS_GPIO_PORT, &GPIO_InitStruct);
 
-    //------------Put SD in SPI mode--------------
-    SPIx_Init(); // SD SPI Config
+    spi2Init(); // SD SPI Config
 
+    //------------Put SD in SPI mode--------------
     // Send dummy byte 0xFF, 10 times with CS high: Rise CS and MOSI for 80 clocks cycles
     SD_CS_HIGH(); // SD chip select high
-    for(counter = 0; counter <= 9; counter++) {
+    for(uint8_t counter=0; counter<10; counter++) {
         SD_IO_WriteByte(SD_DUMMY_BYTE); // Send dummy byte 0xFF
     }
+    // SD initialized and set to SPI mode properly
+    SD_GoIdleState();
 }
 
-*/
+
+void
+deinit_SD_IO() {
+    spi2DeInit();
+
+    GPIO_InitTypeDef  GPIO_InitStruct;
+
+    // Deconfigure SD_CS_PIN pin: SD Card CS pin
+    GPIO_InitStruct.Pin   = SD_CS_PIN;
+    GPIO_InitStruct.Mode  = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull  = GPIO_NOPULL;
+    HAL_GPIO_Init(SD_CS_GPIO_PORT, &GPIO_InitStruct);
+
+    // SD_CS_GPIO Periph clock enable
+    SD_CS_GPIO_CLK_DISABLE();
+}
+
+
 void
 startAlarm() {
+    init_SD_IO();
     if(!prepareFileSystem())
         Error_Handler();
     buffer_offset = BUFFER_OFFSET_NONE;
@@ -846,6 +865,7 @@ closeFileSystem() {
     f_closedir(&Directory);
     f_mount(NULL, (TCHAR const*)"", 0);
     FATFS_UnLinkDriverEx(DiskPath, 0);
+    deinit_SD_IO();
     AppliState = APPLICATION_IDLE;
     return true;
 }

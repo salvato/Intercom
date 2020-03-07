@@ -109,7 +109,7 @@
      
 //------------------------------------------------------------------------------
 
-
+#include "main.h"
 #include "stm32_adafruit_sd.h"
 #include "sdSPI.h"
 #include "stm32f4xx_hal_gpio.h"
@@ -120,15 +120,6 @@
 #include "string.h"
 #include "stdio.h"
 
-
-//  * @brief  SD Control Interface pins
-#define SD_CS_PIN                                 GPIO_PIN_8
-#define SD_CS_GPIO_PORT                           GPIOB
-#define SD_CS_GPIO_CLK_ENABLE()                 __HAL_RCC_GPIOB_CLK_ENABLE()
-#define SD_CS_GPIO_CLK_DISABLE()                __HAL_RCC_GPIOB_CLK_DISABLE()
-
-
-#define SD_DUMMY_BYTE            0xFF
 
 #define SD_MAX_FRAME_LENGTH        17    // Lenght = 16 + 1
 #define SD_CMD_LENGTH               6
@@ -179,11 +170,6 @@
 #define SD_CMD_READ_OCR               58  // CMD55 = 0x79
 
 
-//  * @brief  SD Control Lines management
-#define SD_CS_LOW()       HAL_GPIO_WritePin(SD_CS_GPIO_PORT, SD_CS_PIN, GPIO_PIN_RESET)
-#define SD_CS_HIGH()      HAL_GPIO_WritePin(SD_CS_GPIO_PORT, SD_CS_PIN, GPIO_PIN_SET)
-
-
 // Private variables
 __IO uint8_t SdStatus = SD_NOT_PRESENT;
 
@@ -203,7 +189,6 @@ SPI_HandleTypeDef hnucleo_Spi;
 static uint8_t SD_GetCIDRegister(SD_CID* Cid);
 static uint8_t SD_GetCSDRegister(SD_CSD* Csd);
 static uint8_t SD_GetDataResponse(void);
-static uint8_t SD_GoIdleState(void);
 static SD_CmdAnswer_typedef SD_SendCmd(uint8_t Cmd, uint32_t Arg, uint8_t Crc, uint8_t Answer);
 static uint8_t SD_WaitData(uint8_t data);
 static uint8_t SD_ReadData(void);

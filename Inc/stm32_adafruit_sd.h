@@ -271,6 +271,7 @@ void    SD_IO_Init(void);
 void    SD_IO_CSState(uint8_t state);
 void    SD_IO_WriteReadData(const uint8_t *DataIn, uint8_t *DataOut, uint16_t DataLength);
 uint8_t SD_IO_WriteByte(uint8_t Data);
+uint8_t SD_GoIdleState(void);
 
 /* Link function for HAL delay */
 void HAL_Delay(__IO uint32_t Delay);

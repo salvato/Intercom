@@ -17,6 +17,19 @@
 #define AUDIO_BUFFER_SIZE 1024
 
 
+//  * @brief  SD Control Interface pins
+#define SD_CS_PIN                                 GPIO_PIN_8
+#define SD_CS_GPIO_PORT                           GPIOB
+#define SD_CS_GPIO_CLK_ENABLE()                 __HAL_RCC_GPIOB_CLK_ENABLE()
+#define SD_CS_GPIO_CLK_DISABLE()                __HAL_RCC_GPIOB_CLK_DISABLE()
+
+//  * @brief  SD Control Lines management
+#define SD_CS_LOW()       HAL_GPIO_WritePin(SD_CS_GPIO_PORT, SD_CS_PIN, GPIO_PIN_RESET)
+#define SD_CS_HIGH()      HAL_GPIO_WritePin(SD_CS_GPIO_PORT, SD_CS_PIN, GPIO_PIN_SET)
+
+#define SD_DUMMY_BYTE     0xFF
+
+
 typedef enum {
     APPLICATION_IDLE = 0,
     APPLICATION_START,

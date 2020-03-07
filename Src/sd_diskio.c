@@ -64,7 +64,7 @@
 // * the BSP_SD_Init() call in the SD_Initialize().
 
 
-// #define DISABLE_SD_INIT
+#define DISABLE_SD_INIT 1
 
 // Disk status
 static volatile DSTATUS Stat = STA_NOINIT;
