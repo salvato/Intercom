@@ -29,6 +29,7 @@ Src/system_stm32f4xx.c \
 Src/stm32f4_discovery.c \
 Src/cs43l22.c \
 Src/stm32f4_discovery_audio.c \
+Src/sdSPI.c \
 Src/sd_diskio.c \
 Src/stm32_adafruit_sd.c \
 FatFs/src/ff.c \

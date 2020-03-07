@@ -87,6 +87,7 @@ Inc/nRF24L01.h
 Inc/pdm2pcm_glo.h
 Inc/printf.h
 Inc/radioSPI.h
+Inc/sdSPI.h
 Inc/sd_diskio.h
 Inc/stm32_adafruit_sd.h
 Inc/stm32_hal_legacy.h
@@ -128,6 +129,7 @@ Src/RF24old.cpp
 Src/cs43l22.c
 Src/main.cpp
 Src/radioSPI.cpp
+Src/sdSPI.c
 Src/sd_diskio.c
 Src/stm32_adafruit_sd.c
 Src/stm32f4_discovery.c

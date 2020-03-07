@@ -660,7 +660,36 @@ sendCommand(uint8_t command) {
     HAL_Delay(150);
 }
 
+/*
 
+//  * @brief  Initializes the SD Card and put it into StandBy State
+//  *         (Ready for data transfer).
+void
+SD_IO_Init(void) {
+    GPIO_InitTypeDef  GPIO_InitStruct;
+    uint8_t counter;
+
+    // SD_CS_GPIO Periph clock enable
+    SD_CS_GPIO_CLK_ENABLE();
+
+    // Configure SD_CS_PIN pin: SD Card CS pin
+    GPIO_InitStruct.Pin   = SD_CS_PIN;
+    GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull  = GPIO_PULLUP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
+    HAL_GPIO_Init(SD_CS_GPIO_PORT, &GPIO_InitStruct);
+
+    //------------Put SD in SPI mode--------------
+    SPIx_Init(); // SD SPI Config
+
+    // Send dummy byte 0xFF, 10 times with CS high: Rise CS and MOSI for 80 clocks cycles
+    SD_CS_HIGH(); // SD chip select high
+    for(counter = 0; counter <= 9; counter++) {
+        SD_IO_WriteByte(SD_DUMMY_BYTE); // Send dummy byte 0xFF
+    }
+}
+
+*/
 void
 startAlarm() {
     if(!prepareFileSystem())

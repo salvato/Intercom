@@ -96,6 +96,8 @@ SD_Driver = {
 
 
 // Private functions
+
+
 static DSTATUS
 SD_CheckStatus(BYTE lun) {
     (void)lun;

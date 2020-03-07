@@ -111,6 +111,7 @@
 
 
 #include "stm32_adafruit_sd.h"
+#include "sdSPI.h"
 #include "stm32f4xx_hal_gpio.h"
 #include "stm32f4xx_hal_rcc.h"
 #include "stm32f4xx_hal_dma.h"
@@ -118,37 +119,6 @@
 #include "stdlib.h"
 #include "string.h"
 #include "stdio.h"
-
-#define FS_READNONLY                            1
-
-#define SD_SPIx                                 SPI2
-#define SD_SPIx_CLK_ENABLE()                    __HAL_RCC_SPI2_CLK_ENABLE()
-
-#define SD_SPIx_SCK_AF                          GPIO_AF5_SPI2
-#define SD_SPIx_SCK_GPIO_PORT                   GPIOB
-#define SD_SPIx_SCK_PIN                         GPIO_PIN_13
-#define SD_SPIx_SCK_GPIO_CLK_ENABLE()           __HAL_RCC_GPIOB_CLK_ENABLE()
-#define SD_SPIx_SCK_GPIO_CLK_DISABLE()          __HAL_RCC_GPIOB_CLK_DISABLE()
-
-#define SD_SPIx_MISO_AF                         GPIO_AF5_SPI2
-#define SD_SPIx_MISO_GPIO_PORT                  GPIOC
-#define SD_SPIx_MISO_PIN                        GPIO_PIN_2
-#define SD_SPIx_MISO_GPIO_CLK_ENABLE()          __HAL_RCC_GPIOC_CLK_ENABLE()
-#define SD_SPIx_MISO_GPIO_CLK_DISABLE()         __HAL_RCC_GPIOC_CLK_DISABLE()
-
-#define SD_SPIx_MOSI_AF                         GPIO_AF5_SPI2
-#define SD_SPIx_MOSI_GPIO_PORT                  GPIOB
-#define SD_SPIx_MOSI_PIN                        GPIO_PIN_15
-#define SD_SPIx_MOSI_GPIO_CLK_ENABLE()          __HAL_RCC_GPIOC_CLK_ENABLE()
-#define SD_SPIx_MOSI_GPIO_CLK_DISABLE()         __HAL_RCC_GPIOC_CLK_DISABLE()
-
-
-// Maximum Timeout values for flags waiting loops. These timeouts are not based
-//   on accurate values, they just guarantee that the application will not remain
-//   stuck if the SPI communication is corrupted.
-//   You may modify these timeout values depending on CPU frequency and application
-//   conditions (interrupts routines ...).
-#define SD_SPIx_TIMEOUT_MAX                   1000
 
 
 //  * @brief  SD Control Interface pins
@@ -222,8 +192,6 @@ __IO uint8_t SdStatus = SD_NOT_PRESENT;
 //      0 : Standard capacity
 //      1 : High capacity
 uint16_t flag_SDHC = 0; 
-// Value of Timeout when SPI communication fails
-static uint32_t SpixTimeout = SD_SPIx_TIMEOUT_MAX;
 
 SPI_HandleTypeDef hnucleo_Spi;
 
@@ -237,140 +205,11 @@ static SD_CmdAnswer_typedef SD_SendCmd(uint8_t Cmd, uint32_t Arg, uint8_t Crc, u
 static uint8_t SD_WaitData(uint8_t data);
 static uint8_t SD_ReadData(void);
 
-static void       SPIx_Init(void);
-static void       spi2GpioInit();
-#ifndef FS_READNONLY
-static void       SPIx_Write(uint8_t Value);
-#endif
-static void       SPIx_WriteReadData(const uint8_t *DataIn, uint8_t *DataOut, uint16_t DataLegnth);
-static void       SPIx_Error(void);
-
 /* SD IO functions */
-void              SD_IO_Init(void);
-void              SD_IO_CSState(uint8_t state);
-void              SD_IO_WriteReadData(const uint8_t *DataIn, uint8_t *DataOut, uint16_t DataLength);
-uint8_t           SD_IO_WriteByte(uint8_t Data);
-
-
-//  * @brief  Initializes SPI HAL
-static void
-SPIx_Init(void) {
-    __HAL_RCC_SPI2_FORCE_RESET();
-    __HAL_RCC_SPI2_RELEASE_RESET();
-    memset(&hnucleo_Spi, 0, sizeof(hnucleo_Spi));
-    hnucleo_Spi.Instance = SD_SPIx;
-    // SPI baudrate is set to 21.0 MHz (APB1/SPI_BaudRatePrescaler = 42/2 = 21.0 MHz)
-    // - SD card SPI interface max baudrate is 25MHz for write/read
-    hnucleo_Spi.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
-    hnucleo_Spi.Init.Direction         = SPI_DIRECTION_2LINES;
-    hnucleo_Spi.Init.CLKPhase          = SPI_PHASE_2EDGE;
-    hnucleo_Spi.Init.CLKPolarity       = SPI_POLARITY_HIGH;
-    hnucleo_Spi.Init.CRCCalculation    = SPI_CRCCALCULATION_DISABLED;
-    hnucleo_Spi.Init.CRCPolynomial     = 7;
-    hnucleo_Spi.Init.DataSize          = SPI_DATASIZE_8BIT;
-    hnucleo_Spi.Init.FirstBit          = SPI_FIRSTBIT_MSB;
-    hnucleo_Spi.Init.NSS               = SPI_NSS_SOFT;
-    hnucleo_Spi.Init.TIMode            = SPI_TIMODE_DISABLED;
-    hnucleo_Spi.Init.Mode              = SPI_MODE_MASTER;
-
-    spi2GpioInit(&hnucleo_Spi);
-    HAL_SPI_Init(&hnucleo_Spi);
-}
-
-
-//  * @brief  Initializes SPI MSP.
-static void
-spi2GpioInit() {
-    GPIO_InitTypeDef  GPIO_InitStruct;
-
-    /*** Configure the GPIOs ***/
-    SD_SPIx_SCK_GPIO_CLK_ENABLE();
-    SD_SPIx_MISO_GPIO_CLK_ENABLE();
-    SD_SPIx_MOSI_GPIO_CLK_ENABLE();
-
-    /* Configure SPI SCK */
-    GPIO_InitStruct.Pin       = SD_SPIx_SCK_PIN;
-    GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
-    GPIO_InitStruct.Pull      = GPIO_PULLUP;
-    GPIO_InitStruct.Speed     = GPIO_SPEED_HIGH;
-    GPIO_InitStruct.Alternate = SD_SPIx_SCK_AF;
-    HAL_GPIO_Init(SD_SPIx_SCK_GPIO_PORT, &GPIO_InitStruct);
-
-    /* Configure SPI MOSI */
-    GPIO_InitStruct.Pin       = SD_SPIx_MOSI_PIN;
-    GPIO_InitStruct.Alternate = SD_SPIx_MOSI_AF;
-    GPIO_InitStruct.Pull      = GPIO_PULLDOWN;
-    HAL_GPIO_Init(SD_SPIx_MOSI_GPIO_PORT, &GPIO_InitStruct);
-
-    /* Configure SPI MISO */
-    GPIO_InitStruct.Pin       = SD_SPIx_MISO_PIN;
-    GPIO_InitStruct.Alternate = SD_SPIx_MISO_AF;
-    GPIO_InitStruct.Pull      = GPIO_PULLDOWN;
-    HAL_GPIO_Init(SD_SPIx_MISO_GPIO_PORT, &GPIO_InitStruct);
-
-    /* Enable SPI clock */
-    SD_SPIx_CLK_ENABLE();
-}
-
-
-void
-spi2GpioDeInit() {
-    // Reset peripherals
-    __HAL_RCC_SPI2_FORCE_RESET();
-    __HAL_RCC_SPI2_RELEASE_RESET();
-    // Disable peripherals and GPIO Clocks
-    HAL_GPIO_DeInit(SD_SPIx_SCK_GPIO_PORT, SD_SPIx_SCK_PIN);
-    HAL_GPIO_DeInit(SD_SPIx_MISO_GPIO_PORT, SD_SPIx_MISO_PIN);
-    HAL_GPIO_DeInit(SD_SPIx_MOSI_GPIO_PORT, SD_SPIx_MOSI_PIN);
-    // Disable the NVIC for SPI
-//    HAL_NVIC_DisableIRQ(SPIx_IRQn);
-}
-
-
-
-//  * @brief  SPI Write a byte to device
-//  * @param  DataIn: value to be written
-//  * @param  DataOut: value to be read
-//  * @param  DataLegnth: length of data
-static void
-SPIx_WriteReadData(const uint8_t *DataIn, uint8_t *DataOut, uint16_t DataLegnth) {
-    HAL_StatusTypeDef status = HAL_OK;
-    status = HAL_SPI_TransmitReceive(&hnucleo_Spi, (uint8_t*) DataIn, DataOut, DataLegnth, SpixTimeout);
-    /* Check the communication status */
-    if(status != HAL_OK) {
-        /* Execute user timeout callback */
-        SPIx_Error();
-    }
-}
-
-
-#ifndef FS_READNONLY
-//  * @brief  SPI Write a byte to device.
-//  * @param  Value: value to be written
-static void
-SPIx_Write(uint8_t Value) {
-    HAL_StatusTypeDef status = HAL_OK;
-    uint8_t data;
-
-    status = HAL_SPI_TransmitReceive(&hnucleo_Spi, (uint8_t*) &Value, &data, 1, SpixTimeout);
-
-    /* Check the communication status */
-    if(status != HAL_OK) {
-        /* Execute user timeout callback */
-        SPIx_Error();
-    }
-}
-#endif
-
-
-//  * @brief  SPI error treatment function.
-static void
-SPIx_Error (void) {
-    /* De-initialize the SPI communication BUS */
-    HAL_SPI_DeInit(&hnucleo_Spi);
-    /* Re-Initiaize the SPI communication BUS */
-    SPIx_Init();
-}
+void            SD_IO_Init(void);
+void            SD_IO_CSState(uint8_t state);
+void            SD_IO_WriteReadData(const uint8_t *DataIn, uint8_t *DataOut, uint16_t DataLength);
+uint8_t         SD_IO_WriteByte(uint8_t Data);
 
 
 //  * @brief  Initializes the SD Card and put it into StandBy State
@@ -391,7 +230,7 @@ SD_IO_Init(void) {
     HAL_GPIO_Init(SD_CS_GPIO_PORT, &GPIO_InitStruct);
 
     /*------------Put SD in SPI mode--------------*/
-    SPIx_Init();/* SD SPI Config */
+    spi2Init();/* SD SPI Config */
 
     /* Send dummy byte 0xFF, 10 times with CS high: Rise CS and MOSI for 80 clocks cycles */
     SD_CS_HIGH();/* SD chip select high */
@@ -421,7 +260,7 @@ SD_IO_CSState(uint8_t val) {
 void
 SD_IO_WriteReadData(const uint8_t *DataIn, uint8_t *DataOut, uint16_t DataLength) {
     /* Send the byte */
-    SPIx_WriteReadData(DataIn, DataOut, DataLength);
+    spi2WriteReadData(DataIn, DataOut, DataLength);
 }
 
 
@@ -431,7 +270,7 @@ uint8_t
 SD_IO_WriteByte(uint8_t Data) {
     uint8_t tmp;
     /* Send the byte */
-    SPIx_WriteReadData(&Data, &tmp, 1);
+    spi2WriteReadData(&Data, &tmp, 1);
     return tmp;
 }
 
