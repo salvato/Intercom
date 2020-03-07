@@ -130,53 +130,53 @@
 
 #define SD_DUMMY_BYTE            0xFF
 
-#define SD_MAX_FRAME_LENGTH        17    /* Lenght = 16 + 1 */
+#define SD_MAX_FRAME_LENGTH        17    // Lenght = 16 + 1
 #define SD_CMD_LENGTH               6
 
-#define SD_MAX_TRY                100    /* Number of try */
+#define SD_MAX_TRY                100    // Number of try
 
-#define SD_CSD_STRUCT_V1          0x2    /* CSD struct version V1 */
-#define SD_CSD_STRUCT_V2          0x1    /* CSD struct version V2 */
+#define SD_CSD_STRUCT_V1          0x2    // CSD struct version V1
+#define SD_CSD_STRUCT_V2          0x1    // CSD struct version V2
 
 
 //  * @brief  Start Data tokens:
 //  *         Tokens (necessary because at nop/idle (and CS active) only 0xff is
 //  *         on the data/command line)
-#define SD_TOKEN_START_DATA_SINGLE_BLOCK_READ    0xFE  /* Data token start byte, Start Single Block Read */
-#define SD_TOKEN_START_DATA_MULTIPLE_BLOCK_READ  0xFE  /* Data token start byte, Start Multiple Block Read */
-#define SD_TOKEN_START_DATA_SINGLE_BLOCK_WRITE   0xFE  /* Data token start byte, Start Single Block Write */
-#define SD_TOKEN_START_DATA_MULTIPLE_BLOCK_WRITE 0xFD  /* Data token start byte, Start Multiple Block Write */
-#define SD_TOKEN_STOP_DATA_MULTIPLE_BLOCK_WRITE  0xFD  /* Data toke stop byte, Stop Multiple Block Write */
+#define SD_TOKEN_START_DATA_SINGLE_BLOCK_READ    0xFE  // Data token start byte, Start Single Block Read
+#define SD_TOKEN_START_DATA_MULTIPLE_BLOCK_READ  0xFE  // Data token start byte, Start Multiple Block Read
+#define SD_TOKEN_START_DATA_SINGLE_BLOCK_WRITE   0xFE  // Data token start byte, Start Single Block Write
+#define SD_TOKEN_START_DATA_MULTIPLE_BLOCK_WRITE 0xFD  // Data token start byte, Start Multiple Block Write
+#define SD_TOKEN_STOP_DATA_MULTIPLE_BLOCK_WRITE  0xFD  // Data toke stop byte, Stop Multiple Block Write
 
 
 //  * @brief  Commands: CMDxx = CMD-number | 0x40
-#define SD_CMD_GO_IDLE_STATE          0   /* CMD0 = 0x40  */
-#define SD_CMD_SEND_OP_COND           1   /* CMD1 = 0x41  */
-#define SD_CMD_SEND_IF_COND           8   /* CMD8 = 0x48  */
-#define SD_CMD_SEND_CSD               9   /* CMD9 = 0x49  */
-#define SD_CMD_SEND_CID               10  /* CMD10 = 0x4A */
-#define SD_CMD_STOP_TRANSMISSION      12  /* CMD12 = 0x4C */
-#define SD_CMD_SEND_STATUS            13  /* CMD13 = 0x4D */
-#define SD_CMD_SET_BLOCKLEN           16  /* CMD16 = 0x50 */
-#define SD_CMD_READ_SINGLE_BLOCK      17  /* CMD17 = 0x51 */
-#define SD_CMD_READ_MULT_BLOCK        18  /* CMD18 = 0x52 */
-#define SD_CMD_SET_BLOCK_COUNT        23  /* CMD23 = 0x57 */
-#define SD_CMD_WRITE_SINGLE_BLOCK     24  /* CMD24 = 0x58 */
-#define SD_CMD_WRITE_MULT_BLOCK       25  /* CMD25 = 0x59 */
-#define SD_CMD_PROG_CSD               27  /* CMD27 = 0x5B */
-#define SD_CMD_SET_WRITE_PROT         28  /* CMD28 = 0x5C */
-#define SD_CMD_CLR_WRITE_PROT         29  /* CMD29 = 0x5D */
-#define SD_CMD_SEND_WRITE_PROT        30  /* CMD30 = 0x5E */
-#define SD_CMD_SD_ERASE_GRP_START     32  /* CMD32 = 0x60 */
-#define SD_CMD_SD_ERASE_GRP_END       33  /* CMD33 = 0x61 */
-#define SD_CMD_UNTAG_SECTOR           34  /* CMD34 = 0x62 */
-#define SD_CMD_ERASE_GRP_START        35  /* CMD35 = 0x63 */
-#define SD_CMD_ERASE_GRP_END          36  /* CMD36 = 0x64 */
-#define SD_CMD_UNTAG_ERASE_GROUP      37  /* CMD37 = 0x65 */
-#define SD_CMD_ERASE                  38  /* CMD38 = 0x66 */
-#define SD_CMD_SD_APP_OP_COND         41  /* CMD41 = 0x69 */
-#define SD_CMD_APP_CMD                55  /* CMD55 = 0x77 */
-#define SD_CMD_READ_OCR               58  /* CMD55 = 0x79 */
+#define SD_CMD_GO_IDLE_STATE          0   // CMD0 = 0x40
+#define SD_CMD_SEND_OP_COND           1   // CMD1 = 0x41
+#define SD_CMD_SEND_IF_COND           8   // CMD8 = 0x48
+#define SD_CMD_SEND_CSD               9   // CMD9 = 0x49
+#define SD_CMD_SEND_CID               10  // CMD10 = 0x4A
+#define SD_CMD_STOP_TRANSMISSION      12  // CMD12 = 0x4C
+#define SD_CMD_SEND_STATUS            13  // CMD13 = 0x4D
+#define SD_CMD_SET_BLOCKLEN           16  // CMD16 = 0x50
+#define SD_CMD_READ_SINGLE_BLOCK      17  // CMD17 = 0x51
+#define SD_CMD_READ_MULT_BLOCK        18  // CMD18 = 0x52
+#define SD_CMD_SET_BLOCK_COUNT        23  // CMD23 = 0x57
+#define SD_CMD_WRITE_SINGLE_BLOCK     24  // CMD24 = 0x58
+#define SD_CMD_WRITE_MULT_BLOCK       25  // CMD25 = 0x59
+#define SD_CMD_PROG_CSD               27  // CMD27 = 0x5B
+#define SD_CMD_SET_WRITE_PROT         28  // CMD28 = 0x5C
+#define SD_CMD_CLR_WRITE_PROT         29  // CMD29 = 0x5D
+#define SD_CMD_SEND_WRITE_PROT        30  // CMD30 = 0x5E
+#define SD_CMD_SD_ERASE_GRP_START     32  // CMD32 = 0x60
+#define SD_CMD_SD_ERASE_GRP_END       33  // CMD33 = 0x61
+#define SD_CMD_UNTAG_SECTOR           34  // CMD34 = 0x62
+#define SD_CMD_ERASE_GRP_START        35  // CMD35 = 0x63
+#define SD_CMD_ERASE_GRP_END          36  // CMD36 = 0x64
+#define SD_CMD_UNTAG_ERASE_GROUP      37  // CMD37 = 0x65
+#define SD_CMD_ERASE                  38  // CMD38 = 0x66
+#define SD_CMD_SD_APP_OP_COND         41  // CMD41 = 0x69
+#define SD_CMD_APP_CMD                55  // CMD55 = 0x77
+#define SD_CMD_READ_OCR               58  // CMD55 = 0x79
 
 
 //  * @brief  SD Control Lines management
@@ -196,7 +196,10 @@ uint16_t flag_SDHC = 0;
 SPI_HandleTypeDef hnucleo_Spi;
 
 
+//----------------------------
 // Private function prototypes
+//----------------------------
+
 static uint8_t SD_GetCIDRegister(SD_CID* Cid);
 static uint8_t SD_GetCSDRegister(SD_CSD* Csd);
 static uint8_t SD_GetDataResponse(void);
@@ -205,7 +208,7 @@ static SD_CmdAnswer_typedef SD_SendCmd(uint8_t Cmd, uint32_t Arg, uint8_t Crc, u
 static uint8_t SD_WaitData(uint8_t data);
 static uint8_t SD_ReadData(void);
 
-/* SD IO functions */
+// SD IO functions
 void            SD_IO_Init(void);
 void            SD_IO_CSState(uint8_t state);
 void            SD_IO_WriteReadData(const uint8_t *DataIn, uint8_t *DataOut, uint16_t DataLength);
@@ -219,23 +222,23 @@ SD_IO_Init(void) {
     GPIO_InitTypeDef  GPIO_InitStruct;
     uint8_t counter;
 
-    /* SD_CS_GPIO Periph clock enable */
+    // SD_CS_GPIO Periph clock enable
     SD_CS_GPIO_CLK_ENABLE();
 
-    /* Configure SD_CS_PIN pin: SD Card CS pin */
+    // Configure SD_CS_PIN pin: SD Card CS pin
     GPIO_InitStruct.Pin   = SD_CS_PIN;
     GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
     GPIO_InitStruct.Pull  = GPIO_PULLUP;
     GPIO_InitStruct.Speed = GPIO_SPEED_HIGH;
     HAL_GPIO_Init(SD_CS_GPIO_PORT, &GPIO_InitStruct);
 
-    /*------------Put SD in SPI mode--------------*/
-    spi2Init();/* SD SPI Config */
+    //------------Put SD in SPI mode--------------
+    spi2Init();// SD SPI Config
 
-    /* Send dummy byte 0xFF, 10 times with CS high: Rise CS and MOSI for 80 clocks cycles */
-    SD_CS_HIGH();/* SD chip select high */
+    // Send dummy byte 0xFF, 10 times with CS high: Rise CS and MOSI for 80 clocks cycles
+    SD_CS_HIGH();// SD chip select high
     for(counter = 0; counter <= 9; counter++) {
-        SD_IO_WriteByte(SD_DUMMY_BYTE);/* Send dummy byte 0xFF */
+        SD_IO_WriteByte(SD_DUMMY_BYTE);// Send dummy byte 0xFF
     }
 }
 
@@ -259,7 +262,7 @@ SD_IO_CSState(uint8_t val) {
 //  * @param  DataLength: length of data
 void
 SD_IO_WriteReadData(const uint8_t *DataIn, uint8_t *DataOut, uint16_t DataLength) {
-    /* Send the byte */
+    // Send the byte
     spi2WriteReadData(DataIn, DataOut, DataLength);
 }
 
@@ -269,7 +272,7 @@ SD_IO_WriteReadData(const uint8_t *DataIn, uint8_t *DataOut, uint16_t DataLength
 uint8_t
 SD_IO_WriteByte(uint8_t Data) {
     uint8_t tmp;
-    /* Send the byte */
+    // Send the byte
     spi2WriteReadData(&Data, &tmp, 1);
     return tmp;
 }
@@ -568,9 +571,9 @@ SD_GetCSDRegister(SD_CSD* Csd) {
             SD_IO_WriteByte(SD_DUMMY_BYTE);
             SD_IO_WriteByte(SD_DUMMY_BYTE);
 
-            //************************************************************************
+            //**********************************************************************
             // CSD header decoding
-            //************************************************************************
+            //**********************************************************************
 
             // Byte 0
             Csd->CSDStruct = (CSD_Tab[0] & 0xC0) >> 6;
@@ -595,9 +598,9 @@ SD_GetCSDRegister(SD_CSD* Csd) {
             Csd->RdBlockMisalign = (CSD_Tab[6] & 0x20) >> 5;
             Csd->DSRImpl         = (CSD_Tab[6] & 0x10) >> 4;
 
-            //************************************************************************
+            ///***********************************************************************
             // CSD v1/v2 decoding
-            //************************************************************************
+            ///***********************************************************************
 
             if(flag_SDHC == 0) {
                 Csd->version.v1.Reserved1 = ((CSD_Tab[6] & 0x0C) >> 2);
@@ -773,13 +776,13 @@ SD_SendCmd(uint8_t Cmd, uint32_t Arg, uint8_t Crc, uint8_t Answer) {
         case SD_ANSWER_R1B_EXPECTED :
             retr.r1 = SD_ReadData();
             retr.r2 = SD_IO_WriteByte(SD_DUMMY_BYTE);
-            /* Set CS High */
+            // Set CS High
             SD_IO_CSState(1);
             HAL_Delay(1);
-            /* Set CS Low */
+            // Set CS Low
             SD_IO_CSState(0);
 
-            /* Wait IO line return 0xFF */
+            // Wait IO line return 0xFF
             while (SD_IO_WriteByte(SD_DUMMY_BYTE) != 0xFF);
             break;
         case SD_ANSWER_R2_EXPECTED :
@@ -908,7 +911,7 @@ SD_GoIdleState(void) {
                     return BSP_SD_ERROR;
                 }
                 // Send ACMD41 (SD_CMD_SD_APP_OP_COND) to initialize SDHC or SDXC cards:
-                // R1 response (0x00: no errors) */
+                // R1 response (0x00: no errors)
                 response = SD_SendCmd(SD_CMD_SD_APP_OP_COND, 0x00000000, 0xFF, SD_ANSWER_R1_EXPECTED);
                 SD_IO_CSState(1);
                 SD_IO_WriteByte(SD_DUMMY_BYTE);
@@ -979,4 +982,4 @@ SD_WaitData(uint8_t data) {
 }
 
 
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
+//*********************** (C) COPYRIGHT STMicroelectronics *****END OF FILE***

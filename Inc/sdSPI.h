@@ -40,8 +40,10 @@
  #define SD_SPIx_TIMEOUT_MAX                   1000
 
 
-void       spi2Init();
-void       spi2GpioInit();
+ void       spi2Init();
+ void       spi2GpioInit();
+ void       spi2DeInit();
+ void       spi2GpioDeInit();
 #ifndef FS_READNONLY
     void       spi2Write(uint8_t Value);
 #endif

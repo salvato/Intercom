@@ -35,7 +35,7 @@
 // Value of Timeout when SPI communication fails
 static uint32_t SpixTimeout = SD_SPIx_TIMEOUT_MAX;
 
-SPI_HandleTypeDef hnucleo_Spi;
+SPI_HandleTypeDef hSd_SPI;
 
 
 //  * @brief  Initializes SPI HAL
@@ -43,24 +43,24 @@ void
 spi2Init() {
     __HAL_RCC_SPI2_FORCE_RESET();
     __HAL_RCC_SPI2_RELEASE_RESET();
-    memset(&hnucleo_Spi, 0, sizeof(hnucleo_Spi));
-    hnucleo_Spi.Instance = SD_SPIx;
+    memset(&hSd_SPI, 0, sizeof(hSd_SPI));
+    hSd_SPI.Instance = SD_SPIx;
     // SPI baudrate is set to 21.0 MHz (APB1/SPI_BaudRatePrescaler = 42/2 = 21.0 MHz)
     // - SD card SPI interface max baudrate is 25MHz for write/read
-    hnucleo_Spi.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
-    hnucleo_Spi.Init.Direction         = SPI_DIRECTION_2LINES;
-    hnucleo_Spi.Init.CLKPhase          = SPI_PHASE_2EDGE;
-    hnucleo_Spi.Init.CLKPolarity       = SPI_POLARITY_HIGH;
-    hnucleo_Spi.Init.CRCCalculation    = SPI_CRCCALCULATION_DISABLED;
-    hnucleo_Spi.Init.CRCPolynomial     = 7;
-    hnucleo_Spi.Init.DataSize          = SPI_DATASIZE_8BIT;
-    hnucleo_Spi.Init.FirstBit          = SPI_FIRSTBIT_MSB;
-    hnucleo_Spi.Init.NSS               = SPI_NSS_SOFT;
-    hnucleo_Spi.Init.TIMode            = SPI_TIMODE_DISABLED;
-    hnucleo_Spi.Init.Mode              = SPI_MODE_MASTER;
+    hSd_SPI.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
+    hSd_SPI.Init.Direction         = SPI_DIRECTION_2LINES;
+    hSd_SPI.Init.CLKPhase          = SPI_PHASE_2EDGE;
+    hSd_SPI.Init.CLKPolarity       = SPI_POLARITY_HIGH;
+    hSd_SPI.Init.CRCCalculation    = SPI_CRCCALCULATION_DISABLED;
+    hSd_SPI.Init.CRCPolynomial     = 7;
+    hSd_SPI.Init.DataSize          = SPI_DATASIZE_8BIT;
+    hSd_SPI.Init.FirstBit          = SPI_FIRSTBIT_MSB;
+    hSd_SPI.Init.NSS               = SPI_NSS_SOFT;
+    hSd_SPI.Init.TIMode            = SPI_TIMODE_DISABLED;
+    hSd_SPI.Init.Mode              = SPI_MODE_MASTER;
 
     spi2GpioInit();
-    HAL_SPI_Init(&hnucleo_Spi);
+    HAL_SPI_Init(&hSd_SPI);
 }
 
 
@@ -98,6 +98,12 @@ spi2GpioInit() {
     SD_SPIx_CLK_ENABLE();
 }
 
+void
+spi2DeInit() {
+    spi2GpioDeInit();
+    HAL_SPI_DeInit(&hSd_SPI);
+}
+
 
 void
 spi2GpioDeInit() {
@@ -110,6 +116,9 @@ spi2GpioDeInit() {
     HAL_GPIO_DeInit(SD_SPIx_MOSI_GPIO_PORT, SD_SPIx_MOSI_PIN);
     // Disable the NVIC for SPI
 //    HAL_NVIC_DisableIRQ(SPIx_IRQn);
+    SD_SPIx_SCK_GPIO_CLK_DISABLE();
+    SD_SPIx_MISO_GPIO_CLK_DISABLE();
+    SD_SPIx_MOSI_GPIO_CLK_DISABLE();
 }
 
 
@@ -121,7 +130,7 @@ spi2GpioDeInit() {
 void
 spi2WriteReadData(const uint8_t *DataIn, uint8_t *DataOut, uint16_t DataLegnth) {
     HAL_StatusTypeDef status = HAL_OK;
-    status = HAL_SPI_TransmitReceive(&hnucleo_Spi, (uint8_t*) DataIn, DataOut, DataLegnth, SpixTimeout);
+    status = HAL_SPI_TransmitReceive(&hSd_SPI, (uint8_t*) DataIn, DataOut, DataLegnth, SpixTimeout);
     /* Check the communication status */
     if(status != HAL_OK) {
         /* Execute user timeout callback */
@@ -138,7 +147,7 @@ spi2Write(uint8_t Value) {
     HAL_StatusTypeDef status = HAL_OK;
     uint8_t data;
 
-    status = HAL_SPI_TransmitReceive(&hnucleo_Spi, (uint8_t*) &Value, &data, 1, SpixTimeout);
+    status = HAL_SPI_TransmitReceive(&hSd_SPI, (uint8_t*) &Value, &data, 1, SpixTimeout);
 
     /* Check the communication status */
     if(status != HAL_OK) {
@@ -153,7 +162,7 @@ spi2Write(uint8_t Value) {
 void
 spi2Error () {
     /* De-initialize the SPI communication BUS */
-    HAL_SPI_DeInit(&hnucleo_Spi);
+    HAL_SPI_DeInit(&hSd_SPI);
     /* Re-Initiaize the SPI communication BUS */
     spi2Init();
 }
