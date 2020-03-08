@@ -200,15 +200,15 @@ main(void) {
 
     // Ready for the endless loop...
     while(true) {
-        if(isBaseStation) {
-            connectBase(); // Base will be woken up by a button press
+        if(isBaseStation) { // We are a Base...
+            connectBase();
             processBase();
         }
-        else {
-            connectRemote(); // Remote will be woken up by receiving a command from Base
+        else { // We are a Remote...
+            connectRemote();
             processRemote();
         }
-    }
+    } // while(true)
 
 }
 
@@ -243,7 +243,8 @@ initSystem() {
     }
 
     // Init the Radio
-    if(!rf24Init(radioChannel, RADIO_IN_IRQ_PREPRIO)) return false;
+    if(!rf24Init(radioChannel, RADIO_IN_IRQ_PREPRIO))
+        return false;
     rf24ClearInterrupts();// Avoid false interrupts from Radio
     rf24MaskIRQ(false, false, false);
     return true;
@@ -263,7 +264,8 @@ connectBase() {
     bRadioDataAvailable = false;
     do {
         bBaseConnected = false;
-        bBaseSleeping  = true;
+
+        bBaseSleeping  = true; // Set to true in the Push Button Interrupt Routine
         t0 = HAL_GetTick()-QUERY_INTERVAL-1;
         while(bBaseSleeping) {
             if(HAL_GetTick()-t0 > QUERY_INTERVAL) {
@@ -320,8 +322,9 @@ connectBase() {
             bTimeoutElapsed = (HAL_GetTick()-startConnectTime) > MAX_CONNECTION_TIME;
         } // while(!bBaseConnected && !bTimeoutElapsed)
 
-        if(!bBaseConnected) { // Connection timed out...
-            // Probaly we should set the NOACK to avoid loosing the ACK message
+        if(!bBaseConnected) {
+            // Connection timed out...
+            // Should we set the NOACK to avoid loosing the ACK message ???
             txBuffer[0] = connectionTimedOut;
             BSP_LED_On(LED_BLUE);
             rf24Enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
@@ -332,7 +335,8 @@ connectBase() {
 
     } while(!bBaseConnected);
 
-    ledsOff(); // Connection with the Remote established...
+    // Connection with the Remote established...
+    ledsOff();
 } // void connectBase()
 
 

@@ -125,7 +125,6 @@ LICENSE
 Makefile
 STM32F407VGTx_FLASH.ld
 Src/RF24.cpp
-Src/RF24old.cpp
 Src/cs43l22.c
 Src/main.cpp
 Src/radioSPI.cpp

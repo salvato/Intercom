@@ -101,9 +101,7 @@ const uint16_t BUTTON_PIN[BUTTONn] = {KEY_BUTTON_PIN};
 const uint8_t BUTTON_IRQn[BUTTONn] = {KEY_BUTTON_EXTI_IRQn};
 
 uint32_t I2cxTimeout = I2Cx_TIMEOUT_MAX;    /*<! Value of Timeout when I2C communication fails */ 
-uint32_t SpixTimeout = SPIx_TIMEOUT_MAX;    /*<! Value of Timeout when SPI communication fails */
 
-static SPI_HandleTypeDef    SpiHandle;
 static I2C_HandleTypeDef    I2cHandle;
 /**
   * @}
@@ -125,17 +123,6 @@ static uint8_t  I2Cx_ReadData(uint8_t Addr, uint8_t Reg);
 static void     I2Cx_MspInit(void);
 static void     I2Cx_Error(uint8_t Addr);
 
-/* Link functions for Accelerometer peripheral */
-void            ACCELERO_IO_Init(void);
-void            ACCELERO_IO_ITConfig(void);
-void            ACCELERO_IO_Write(uint8_t *pBuffer, uint8_t WriteAddr, uint16_t NumByteToWrite);
-void            ACCELERO_IO_Read(uint8_t *pBuffer, uint8_t ReadAddr, uint16_t NumByteToRead);
-
-/* Link functions for Audio peripheral */
-void            AUDIO_IO_Init(void);
-void            AUDIO_IO_DeInit(void);
-void            AUDIO_IO_Write(uint8_t Addr, uint8_t Reg, uint8_t Value);
-uint8_t         AUDIO_IO_Read(uint8_t Addr, uint8_t Reg);
 /**
   * @}
   */
@@ -422,123 +409,6 @@ I2Cx_MspInit(void) {
 /*******************************************************************************
                             LINK OPERATIONS
 *******************************************************************************/
-
-/***************************** LINK ACCELEROMETER *****************************/
-
-/**
-  * @brief  Configures the Accelerometer SPI interface.
-  */
-void
-ACCELERO_IO_Init(void) {
-    GPIO_InitTypeDef GPIO_InitStructure;
-
-    /* Configure the Accelerometer Control pins --------------------------------*/
-    /* Enable CS GPIO clock and configure GPIO pin for Accelerometer Chip select */
-    ACCELERO_CS_GPIO_CLK_ENABLE();
-
-    /* Configure GPIO PIN for LIS Chip select */
-    GPIO_InitStructure.Pin = ACCELERO_CS_PIN;
-    GPIO_InitStructure.Mode = GPIO_MODE_OUTPUT_PP;
-    GPIO_InitStructure.Pull  = GPIO_NOPULL;
-    GPIO_InitStructure.Speed = GPIO_SPEED_MEDIUM;
-    HAL_GPIO_Init(ACCELERO_CS_GPIO_PORT, &GPIO_InitStructure);
-
-    /* Deselect: Chip Select high */
-    ACCELERO_CS_HIGH();
-
-    SPIx_Init();
-}
-
-
-/**
-  * @brief  Configures the Accelerometer INT2.
-  *         EXTI0 is already used by user button so INT1 is not configured here.
-  */
-void
-ACCELERO_IO_ITConfig(void) {
-    GPIO_InitTypeDef GPIO_InitStructure;
-
-    /* Enable INT2 GPIO clock and configure GPIO PINs to detect Interrupts */
-    ACCELERO_INT_GPIO_CLK_ENABLE();
-
-    /* Configure GPIO PINs to detect Interrupts */
-    GPIO_InitStructure.Pin = ACCELERO_INT2_PIN;
-    GPIO_InitStructure.Mode = GPIO_MODE_IT_RISING;
-    GPIO_InitStructure.Speed = GPIO_SPEED_FAST;
-    GPIO_InitStructure.Pull = GPIO_NOPULL;
-    HAL_GPIO_Init(ACCELERO_INT_GPIO_PORT, &GPIO_InitStructure);
-
-    /* Enable and set Accelerometer INT2 to the lowest priority */
-    HAL_NVIC_SetPriority((IRQn_Type)ACCELERO_INT2_EXTI_IRQn, 0x0F, 0);
-    HAL_NVIC_EnableIRQ((IRQn_Type)ACCELERO_INT2_EXTI_IRQn);
-}
-
-
-/**
-  * @brief  Writes one byte to the Accelerometer.
-  * @param  pBuffer: pointer to the buffer containing the data to be written to the Accelerometer.
-  * @param  WriteAddr: Accelerometer's internal address to write to.
-  * @param  NumByteToWrite: Number of bytes to write.
-  */
-void
-ACCELERO_IO_Write(uint8_t *pBuffer, uint8_t WriteAddr, uint16_t NumByteToWrite) {
-    /* Configure the MS bit:
-     - When 0, the address will remain unchanged in multiple read/write commands.
-     - When 1, the address will be auto incremented in multiple read/write commands.
-  */
-    if(NumByteToWrite > 0x01) {
-        WriteAddr |= (uint8_t)MULTIPLEBYTE_CMD;
-    }
-    /* Set chip select Low at the start of the transmission */
-    ACCELERO_CS_LOW();
-
-    /* Send the Address of the indexed register */
-    SPIx_WriteRead(WriteAddr);
-
-    /* Send the data that will be written into the device (MSB First) */
-    while(NumByteToWrite >= 0x01) {
-        SPIx_WriteRead(*pBuffer);
-        NumByteToWrite--;
-        pBuffer++;
-    }
-
-    /* Set chip select High at the end of the transmission */
-    ACCELERO_CS_HIGH();
-}
-
-
-/**
-  * @brief  Reads a block of data from the Accelerometer.
-  * @param  pBuffer: pointer to the buffer that receives the data read from the Accelerometer.
-  * @param  ReadAddr: Accelerometer's internal address to read from.
-  * @param  NumByteToRead: number of bytes to read from the Accelerometer.
-  */
-void
-ACCELERO_IO_Read(uint8_t *pBuffer, uint8_t ReadAddr, uint16_t NumByteToRead) {
-    if(NumByteToRead > 0x01) {
-        ReadAddr |= (uint8_t)(READWRITE_CMD | MULTIPLEBYTE_CMD);
-    }
-    else {
-        ReadAddr |= (uint8_t)READWRITE_CMD;
-    }
-    /* Set chip select Low at the start of the transmission */
-    ACCELERO_CS_LOW();
-
-    /* Send the Address of the indexed register */
-    SPIx_WriteRead(ReadAddr);
-
-    /* Receive the data that will be read from the device (MSB First) */
-    while(NumByteToRead > 0x00) {
-        /* Send dummy byte (0x00) to generate the SPI clock to ACCELEROMETER (Slave device) */
-        *pBuffer = SPIx_WriteRead(DUMMY_BYTE);
-        NumByteToRead--;
-        pBuffer++;
-    }
-
-    /* Set chip select High at the end of the transmission */
-    ACCELERO_CS_HIGH();
-}
-
 
 /********************************* LINK AUDIO *********************************/
 
