@@ -33,33 +33,8 @@
   *
   ******************************************************************************
   */
-/* Includes ------------------------------------------------------------------*/
+
 #include "stm32f4_discovery.h"
-
-/** @defgroup BSP BSP
-  * @{
-  */
-
-/** @defgroup STM32F4_DISCOVERY STM32F4 DISCOVERY
-  * @{
-  */
-
-/** @defgroup STM32F4_DISCOVERY_LOW_LEVEL STM32F4 DISCOVERY LOW LEVEL
-  * @brief This file provides set of firmware functions to manage Leds and push-button
-  *        available on STM32F4-Discovery Kit from STMicroelectronics.
-  * @{
-  */
-
-/** @defgroup STM32F4_DISCOVERY_LOW_LEVEL_Private_TypesDefinitions STM32F4 DISCOVERY LOW LEVEL Private TypesDefinitions
-  * @{
-  */
-/**
-  * @}
-  */
-
-/** @defgroup STM32F4_DISCOVERY_LOW_LEVEL_Private_Defines STM32F4 DISCOVERY LOW LEVEL Private Defines
-  * @{
-  */
 
 /**
   * @brief STM32F4 DISCO BSP Driver version number V2.1.3
@@ -72,17 +47,6 @@
     |(__STM32F4_DISCO_BSP_VERSION_SUB1 << 16)\
     |(__STM32F4_DISCO_BSP_VERSION_SUB2 << 8 )\
     |(__STM32F4_DISCO_BSP_VERSION_RC))
-/**
-  * @}
-  */
-
-
-/** @defgroup STM32F4_DISCOVERY_LOW_LEVEL_Private_Macros STM32F4 DISCOVERY LOW LEVEL Private Macros
-  * @{
-  */
-/**
-  * @}
-  */
 
 /** @defgroup STM32F4_DISCOVERY_LOW_LEVEL_Private_Variables STM32F4 DISCOVERY LOW LEVEL Private Variables
   * @{
@@ -91,6 +55,7 @@ GPIO_TypeDef* GPIO_PORT[LEDn] = {LED4_GPIO_PORT,
                                  LED3_GPIO_PORT,
                                  LED5_GPIO_PORT,
                                  LED6_GPIO_PORT};
+
 const uint16_t GPIO_PIN[LEDn] = {LED4_PIN, 
                                  LED3_PIN,
                                  LED5_PIN,
@@ -103,16 +68,6 @@ const uint8_t BUTTON_IRQn[BUTTONn] = {KEY_BUTTON_EXTI_IRQn};
 uint32_t I2cxTimeout = I2Cx_TIMEOUT_MAX;    /*<! Value of Timeout when I2C communication fails */ 
 
 static I2C_HandleTypeDef    I2cHandle;
-/**
-  * @}
-  */
-
-/** @defgroup STM32F4_DISCOVERY_LOW_LEVEL_Private_FunctionPrototypes STM32F4 DISCOVERY LOW LEVEL Private FunctionPrototypes
-  * @{
-  */
-/**
-  * @}
-  */
 
 /** @defgroup STM32F4_DISCOVERY_LOW_LEVEL_Private_Functions STM32F4 DISCOVERY LOW LEVEL Private Functions
   * @{
@@ -123,13 +78,6 @@ static uint8_t  I2Cx_ReadData(uint8_t Addr, uint8_t Reg);
 static void     I2Cx_MspInit(void);
 static void     I2Cx_Error(uint8_t Addr);
 
-/**
-  * @}
-  */
-
-/** @defgroup STM32F4_DISCOVERY_LOW_LEVEL_LED_Functions STM32F4 DISCOVERY LOW LEVEL LED Functions
-  * @{
-  */
 
 /**
   * @brief  This method returns the STM32F4 DISCO BSP Driver revision
@@ -214,11 +162,6 @@ BSP_LED_Toggle(Led_TypeDef Led) {
 }
 
 
-/**
-  * @}
-  */
-
-
 /** @defgroup STM32F4_DISCOVERY_LOW_LEVEL_BUTTON_Functions STM32F4 DISCOVERY LOW LEVEL BUTTON Functions
   * @{
   */
@@ -277,13 +220,10 @@ BSP_PB_GetState(Button_TypeDef Button) {
 }
 
 
-/**
-  * @}
-  */
-
 /** @defgroup STM32F4_DISCOVERY_LOW_LEVEL_BUS_Functions STM32F4 DISCOVERY LOW LEVEL BUS Functions
   * @{
   */
+
 
 /*******************************************************************************
                             BUS OPERATIONS
@@ -477,21 +417,5 @@ AUDIO_IO_Read(uint8_t Addr, uint8_t Reg) {
     return I2Cx_ReadData(Addr, Reg);
 }
 
-
-/**
-  * @}
-  */
-
-/**
-  * @}
-  */
-
-/**
-  * @}
-  */
-
-/**
-  * @}
-  */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
