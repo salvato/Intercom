@@ -108,8 +108,8 @@ static void relayPulse(uint32_t relayChannel, uint16_t msPulse);
 //===============================================================
 
 
-TIM_HandleTypeDef  Tim2Handle;
-TIM_HandleTypeDef  Tim3Handle;
+TIM_HandleTypeDef  Tim2Handle; // For ADC Time Base
+TIM_HandleTypeDef  Tim3Handle; // For Relay Pulses
 ADC_HandleTypeDef  hAdc;
 
 char buf[255];
@@ -210,7 +210,7 @@ main(void) {
         }
     } // while(true)
 
-}
+} // int main(void)
 
 
 bool
@@ -494,7 +494,7 @@ processBase() {
                 }
             }
             else { // The packet is a command
-                HAL_TIM_Base_Stop(&Tim2Handle); // Avoid interference with Audio Data...
+                HAL_TIM_Base_Stop(&Tim2Handle); // Avoid interference with ADC Audio Data...
                 BSP_AUDIO_OUT_Pause();
                 processReceivedCommand(rxBuffer[0], pipeNum);
                 BSP_AUDIO_OUT_Resume();
@@ -615,7 +615,7 @@ processReceivedCommand(uint8_t command, uint8_t sourcePipe) {
     }
     rf24WriteAckPayload(sourcePipe, txBuffer, MAX_PAYLOAD_SIZE);
     HAL_Delay(1); // Is this needed ???
-}
+} // void processReceivedCommand()
 
 
 void
@@ -669,7 +669,7 @@ sendCommand(uint8_t command) {
         BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE); // Restart sending Audio Data
     }
     HAL_Delay(150);
-}
+} // void sendCommand()
 
 
 void
@@ -696,7 +696,7 @@ init_SD_IO(void) {
     }
     // SD initialized and set to SPI mode properly
     SD_GoIdleState();
-}
+} // void init_SD_IO()
 
 
 void
@@ -713,7 +713,7 @@ deinit_SD_IO() {
 
     // SD_CS_GPIO Periph clock enable
     SD_CS_GPIO_CLK_DISABLE();
-}
+} // void deinit_SD_IO()
 
 
 void
@@ -740,7 +740,7 @@ startAlarm() {
     f_read (&File2Read, &Audio_Buffer[0], AUDIO_BUFFER_SIZE, &bytesread);
     AudioRemSize = WaveDataLength - bytesread;
     BSP_AUDIO_OUT_Play((uint16_t*)&Audio_Buffer[0], AUDIO_BUFFER_SIZE);
-}
+} // void startAlarm()
 
 
 bool
@@ -768,7 +768,7 @@ updateAlarm() {
         return false;
     }
     return true;
-}
+} // bool updateAlarm()
 
 
 void
@@ -777,7 +777,7 @@ stopAlarm() {
     free(Audio_Buffer);
     f_close(&File2Read);
     closeFileSystem();
-}
+} // void stopAlarm()
 
 
 void
@@ -818,7 +818,7 @@ relayTIM3Init() {
 
   HAL_NVIC_SetPriority(TIM3_IRQn, RELAY_PULSE_IRQ_PREPRIO, 0);
   HAL_NVIC_EnableIRQ(TIM3_IRQn);
-}
+} // void relayTIM3Init()
 
 
 void
@@ -849,7 +849,7 @@ relayPulse(uint32_t relayChannel, uint16_t msPulse) {
     if(HAL_TIM_OC_Start_IT(&Tim3Handle, relayChannel) != HAL_OK) {
       Error_Handler();
     }
-}
+} // void relayPulse()
 
 
 bool
@@ -866,7 +866,7 @@ prepareFileSystem() {
 
     AppliState = APPLICATION_START;
     return true;
-}
+} // bool prepareFileSystem()
 
 
 bool
@@ -877,7 +877,7 @@ closeFileSystem() {
     deinit_SD_IO();
     AppliState = APPLICATION_IDLE;
     return true;
-}
+} // bool closeFileSystem()
 
 
 void
@@ -886,7 +886,7 @@ ledsOff() {
     BSP_LED_Off(LED_GREEN);
     BSP_LED_Off(LED_BLUE);
     BSP_LED_Off(LED_RED);
-}
+} // void ledsOff()
 
 
 void
@@ -902,10 +902,9 @@ pushButtonInit(GPIO_TypeDef* Port, uint32_t Pin, IRQn_Type Irq) {
     // Enable and set Button EXTI Interrupt to the lowest priority
     HAL_NVIC_SetPriority(Irq, PUSH_BTN_IRQ_PREPRIO, 0);
     HAL_NVIC_EnableIRQ(Irq);
-}
+} // void pushButtonInit()
 
 
-// TIM3
 void
 relayGPIOInit(GPIO_TypeDef* Port, uint32_t Pin) {
     GPIO_InitTypeDef GPIO_InitStruct;
@@ -916,7 +915,7 @@ relayGPIOInit(GPIO_TypeDef* Port, uint32_t Pin) {
     GPIO_InitStruct.Mode      = GPIO_MODE_OUTPUT_PP;
     HAL_GPIO_Init(Port, &GPIO_InitStruct);
     HAL_GPIO_WritePin(Port, Pin, GPIO_PIN_SET);
-}
+} // void relayGPIOInit()
 
 
 
@@ -949,7 +948,7 @@ initBuffers(bool isBaseStation) {
         memset(pdmDataIn,  0, INTERNAL_BUFF_SIZE*sizeof(*pdmDataIn));
         memset(pcmDataOut, 0, 2*PCM_OUT_SIZE*sizeof(*pcmDataOut));
     }
-}
+} // void initBuffers()
 
 
 void
