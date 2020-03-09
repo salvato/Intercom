@@ -955,7 +955,7 @@ void
 BSP_AUDIO_OUT_ClockConfig(I2S_HandleTypeDef *hi2s, uint32_t AudioFreq, void *Params) {
     // Ensure the clock is the same both for MIC input and DAC output
     BSP_AUDIO_IN_ClockConfig(hi2s, AudioFreq, Params);
-}
+} // void BSP_AUDIO_OUT_ClockConfig()
 
 
 void
@@ -975,10 +975,10 @@ setRole(bool bPTX) {
         }
         rf24StartListening();
     }
-}
+} // void setRole()
 
 
-/// ADC MSP Initialization
+// ADC MSP Initialization
 void
 HAL_ADC_MspInit(ADC_HandleTypeDef* hadc) {
     GPIO_InitTypeDef          GPIO_InitStruct;
@@ -1025,7 +1025,7 @@ HAL_ADC_MspInit(ADC_HandleTypeDef* hadc) {
     // NVIC configuration for DMA transfer complete interrupt
     HAL_NVIC_SetPriority(ADC1_DMA_IRQn, ADC_DMA_IRQ_PREPRIO, 0);
     HAL_NVIC_EnableIRQ(ADC1_DMA_IRQn);
-}
+} // void HAL_ADC_MspInit()
 
 
 // The output register of the ADCs is a 16 bit register
@@ -1057,7 +1057,7 @@ adcInit() {
         Error_Handler();
     }
     adcTIM2Init();
-}
+} // void adcInit()
 
 
 // Timer2 provides periodic triggers to start ADC conversion
@@ -1094,7 +1094,7 @@ adcTIM2Init(void) {
     if(HAL_TIMEx_MasterConfigSynchronization(&Tim2Handle, &sMasterConfig) != HAL_OK) {
         Error_Handler();
     }
-}
+} // void adcTIM2Init()
 
 
 // extern "C" {
