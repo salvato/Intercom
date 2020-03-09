@@ -36,9 +36,7 @@
 
 #include "stm32f4_discovery.h"
 
-/**
-  * @brief STM32F4 DISCO BSP Driver version number V2.1.3
-  */
+//  * @brief STM32F4 DISCO BSP Driver version number V2.1.3
 #define __STM32F4_DISCO_BSP_VERSION_MAIN   (0x02) /*!< [31:24] main version */
 #define __STM32F4_DISCO_BSP_VERSION_SUB1   (0x01) /*!< [23:16] sub1 version */
 #define __STM32F4_DISCO_BSP_VERSION_SUB2   (0x03) /*!< [15:8]  sub2 version */
@@ -48,9 +46,8 @@
     |(__STM32F4_DISCO_BSP_VERSION_SUB2 << 8 )\
     |(__STM32F4_DISCO_BSP_VERSION_RC))
 
-/** @defgroup STM32F4_DISCOVERY_LOW_LEVEL_Private_Variables STM32F4 DISCOVERY LOW LEVEL Private Variables
-  * @{
-  */
+//* @defgroup STM32F4_DISCOVERY_LOW_LEVEL_Private_Variables STM32F4 DISCOVERY LOW LEVEL Private Variables
+
 GPIO_TypeDef* GPIO_PORT[LEDn] = {LED4_GPIO_PORT, 
                                  LED3_GPIO_PORT,
                                  LED5_GPIO_PORT,
@@ -69,9 +66,8 @@ uint32_t I2cxTimeout = I2Cx_TIMEOUT_MAX;    /*<! Value of Timeout when I2C commu
 
 static I2C_HandleTypeDef    I2cHandle;
 
-/** @defgroup STM32F4_DISCOVERY_LOW_LEVEL_Private_Functions STM32F4 DISCOVERY LOW LEVEL Private Functions
-  * @{
-  */
+//* @defgroup STM32F4_DISCOVERY_LOW_LEVEL_Private_Functions STM32F4 DISCOVERY LOW LEVEL Private Functions
+
 static void     I2Cx_Init(void);
 static void     I2Cx_WriteData(uint8_t Addr, uint8_t Reg, uint8_t Value);
 static uint8_t  I2Cx_ReadData(uint8_t Addr, uint8_t Reg);
@@ -79,25 +75,21 @@ static void     I2Cx_MspInit(void);
 static void     I2Cx_Error(uint8_t Addr);
 
 
-/**
-  * @brief  This method returns the STM32F4 DISCO BSP Driver revision
-  * @retval version : 0xXYZR (8bits for each decimal, R for RC)
-  */
+//  * @brief  This method returns the STM32F4 DISCO BSP Driver revision
+//  * @retval version : 0xXYZR (8bits for each decimal, R for RC)
 uint32_t
 BSP_GetVersion(void) {
     return __STM32F4_DISCO_BSP_VERSION;
 }
 
 
-/**
-  * @brief  Configures LED GPIO.
-  * @param  Led: Specifies the Led to be configured.
-  *   This parameter can be one of following parameters:
-  *     @arg LED4
-  *     @arg LED3
-  *     @arg LED5
-  *     @arg LED6
-  */
+//  * @brief  Configures LED GPIO.
+//  * @param  Led: Specifies the Led to be configured.
+//  *   This parameter can be one of following parameters:
+//  *     @arg LED4
+//  *     @arg LED3
+//  *     @arg LED5
+//  *     @arg LED6
 void
 BSP_LED_Init(Led_TypeDef Led) {
     GPIO_InitTypeDef  GPIO_InitStruct;
@@ -117,65 +109,56 @@ BSP_LED_Init(Led_TypeDef Led) {
 }
 
 
-/**
-  * @brief  Turns selected LED On.
-  * @param  Led: Specifies the Led to be set on.
-  *   This parameter can be one of following parameters:
-  *     @arg LED4
-  *     @arg LED3
-  *     @arg LED5
-  *     @arg LED6
-  */
+//  * @brief  Turns selected LED On.
+//  * @param  Led: Specifies the Led to be set on.
+//  *   This parameter can be one of following parameters:
+//  *     @arg LED4
+//  *     @arg LED3
+//  *     @arg LED5
+//  *     @arg LED6
 void
 BSP_LED_On(Led_TypeDef Led) {
     HAL_GPIO_WritePin(GPIO_PORT[Led], GPIO_PIN[Led], GPIO_PIN_SET);
 }
 
 
-/**
-  * @brief  Turns selected LED Off.
-  * @param  Led: Specifies the Led to be set off.
-  *   This parameter can be one of following parameters:
-  *     @arg LED4
-  *     @arg LED3
-  *     @arg LED5
-  *     @arg LED6
-  */
+//  * @brief  Turns selected LED Off.
+//  * @param  Led: Specifies the Led to be set off.
+//  *   This parameter can be one of following parameters:
+//  *     @arg LED4
+//  *     @arg LED3
+//  *     @arg LED5
+//  *     @arg LED6
 void
 BSP_LED_Off(Led_TypeDef Led) {
     HAL_GPIO_WritePin(GPIO_PORT[Led], GPIO_PIN[Led], GPIO_PIN_RESET);
 }
 
 
-/**
-  * @brief  Toggles the selected LED.
-  * @param  Led: Specifies the Led to be toggled.
-  *   This parameter can be one of following parameters:
-  *     @arg LED4
-  *     @arg LED3
-  *     @arg LED5
-  *     @arg LED6
-  */
+//  * @brief  Toggles the selected LED.
+//  * @param  Led: Specifies the Led to be toggled.
+//  *   This parameter can be one of following parameters:
+//  *     @arg LED4
+//  *     @arg LED3
+//  *     @arg LED5
+//  *     @arg LED6
 void
 BSP_LED_Toggle(Led_TypeDef Led) {
     HAL_GPIO_TogglePin(GPIO_PORT[Led], GPIO_PIN[Led]);
 }
 
 
-/** @defgroup STM32F4_DISCOVERY_LOW_LEVEL_BUTTON_Functions STM32F4 DISCOVERY LOW LEVEL BUTTON Functions
-  * @{
-  */
+//* @defgroup STM32F4_DISCOVERY_LOW_LEVEL_BUTTON_Functions STM32F4 DISCOVERY LOW LEVEL BUTTON Functions
 
-/**
-  * @brief  Configures Button GPIO and EXTI Line.
-  * @param  Button: Specifies the Button to be configured.
-  *   This parameter should be: BUTTON_KEY
-  * @param  Mode: Specifies Button mode.
-  *   This parameter can be one of following parameters:
-  *     @arg BUTTON_MODE_GPIO: Button will be used as simple IO
-  *     @arg BUTTON_MODE_EXTI: Button will be connected to EXTI line with interrupt
-  *                            generation capability
-  */
+
+//  * @brief  Configures Button GPIO and EXTI Line.
+//  * @param  Button: Specifies the Button to be configured.
+//  *   This parameter should be: BUTTON_KEY
+//  * @param  Mode: Specifies Button mode.
+//  *   This parameter can be one of following parameters:
+//  *     @arg BUTTON_MODE_GPIO: Button will be used as simple IO
+//  *     @arg BUTTON_MODE_EXTI: Button will be connected to EXTI line with interrupt
+//  *                            generation capability
 void
 BSP_PB_Init(Button_TypeDef Button, ButtonMode_TypeDef Mode) {
     GPIO_InitTypeDef GPIO_InitStruct;
@@ -208,21 +191,17 @@ BSP_PB_Init(Button_TypeDef Button, ButtonMode_TypeDef Mode) {
 }
 
 
-/**
-  * @brief  Returns the selected Button state.
-  * @param  Button: Specifies the Button to be checked.
-  *   This parameter should be: BUTTON_KEY
-  * @retval The Button GPIO pin value.
-  */
+//  * @brief  Returns the selected Button state.
+//  * @param  Button: Specifies the Button to be checked.
+//  *   This parameter should be: BUTTON_KEY
+//  * @retval The Button GPIO pin value.
 uint32_t
 BSP_PB_GetState(Button_TypeDef Button) {
     return HAL_GPIO_ReadPin(BUTTON_PORT[Button], BUTTON_PIN[Button]);
 }
 
 
-/** @defgroup STM32F4_DISCOVERY_LOW_LEVEL_BUS_Functions STM32F4 DISCOVERY LOW LEVEL BUS Functions
-  * @{
-  */
+//* @defgroup STM32F4_DISCOVERY_LOW_LEVEL_BUS_Functions STM32F4 DISCOVERY LOW LEVEL BUS Functions
 
 
 /*******************************************************************************
@@ -231,9 +210,8 @@ BSP_PB_GetState(Button_TypeDef Button) {
 
 
 /******************************* I2C Routines**********************************/
-/**
-  * @brief  Configures I2C interface.
-  */
+
+//  * @brief  Configures I2C interface.
 static void
 I2Cx_Init(void) {
     if(HAL_I2C_GetState(&I2cHandle) == HAL_I2C_STATE_RESET) {
@@ -251,13 +229,11 @@ I2Cx_Init(void) {
 }
 
 
-/**
-  * @brief  Write a value in a register of the device through BUS.
-  * @param  Addr: Device address on BUS Bus.
-  * @param  Reg: The target register address to write
-  * @param  Value: The target register value to be written
-  * @retval HAL status
-  */
+//  * @brief  Write a value in a register of the device through BUS.
+//  * @param  Addr: Device address on BUS Bus.
+//  * @param  Reg: The target register address to write
+//  * @param  Value: The target register value to be written
+//  * @retval HAL status
 static void
 I2Cx_WriteData(uint8_t Addr, uint8_t Reg, uint8_t Value) {
     HAL_StatusTypeDef status = HAL_OK;
@@ -272,12 +248,10 @@ I2Cx_WriteData(uint8_t Addr, uint8_t Reg, uint8_t Value) {
 }
 
 
-/**
-  * @brief  Read a register of the device through BUS
-  * @param  Addr: Device address on BUS
-  * @param  Reg: The target register address to read
-  * @retval HAL status
-  */
+//  * @brief  Read a register of the device through BUS
+//  * @param  Addr: Device address on BUS
+//  * @param  Reg: The target register address to read
+//  * @retval HAL status
 static uint8_t
 I2Cx_ReadData(uint8_t Addr, uint8_t Reg) {
     HAL_StatusTypeDef status = HAL_OK;
@@ -294,10 +268,8 @@ I2Cx_ReadData(uint8_t Addr, uint8_t Reg) {
 }
 
 
-/**
-  * @brief  Manages error callback by re-initializing I2C.
-  * @param  Addr: I2C Address
-  */
+//  * @brief  Manages error callback by re-initializing I2C.
+//  * @param  Addr: I2C Address
 static void
 I2Cx_Error(uint8_t Addr) {
     UNUSED(Addr);
@@ -309,9 +281,7 @@ I2Cx_Error(uint8_t Addr) {
 }
 
 
-/**
-  * @brief I2C MSP Initialization
-  */
+//  * @brief I2C MSP Initialization
 static void
 I2Cx_MspInit(void) {
     GPIO_InitTypeDef  GPIO_InitStruct;
@@ -350,11 +320,9 @@ I2Cx_MspInit(void) {
                             LINK OPERATIONS
 *******************************************************************************/
 
-/********************************* LINK AUDIO *********************************/
+/********************************* LINK AUDIO (CS43L22) ***********************/
 
-/**
-  * @brief  Initializes Audio low level.
-  */
+//  * @brief  Initializes Audio low level.
 void
 AUDIO_IO_Init(void) {
     GPIO_InitTypeDef  GPIO_InitStruct;
@@ -385,33 +353,27 @@ AUDIO_IO_Init(void) {
 }
 
 
-/**
-  * @brief  DeInitializes Audio low level.
-  */
+//  * @brief  DeInitializes Audio low level.
 void
 AUDIO_IO_DeInit(void) {
 
 }
 
 
-/**
-  * @brief  Writes a single data.
-  * @param  Addr: I2C address
-  * @param  Reg: Reg address
-  * @param  Value: Data to be written
-  */
+//  * @brief  Writes a single data.
+//  * @param  Addr: I2C address
+//  * @param  Reg: Reg address
+//  * @param  Value: Data to be written
 void
 AUDIO_IO_Write (uint8_t Addr, uint8_t Reg, uint8_t Value) {
     I2Cx_WriteData(Addr, Reg, Value);
 }
 
 
-/**
-  * @brief  Reads a single data.
-  * @param  Addr: I2C address
-  * @param  Reg: Reg address
-  * @retval Data to be read
-  */
+//  * @brief  Reads a single data.
+//  * @param  Addr: I2C address
+//  * @param  Reg: Reg address
+//  * @retval Data to be read
 uint8_t
 AUDIO_IO_Read(uint8_t Addr, uint8_t Reg) {
     return I2Cx_ReadData(Addr, Reg);

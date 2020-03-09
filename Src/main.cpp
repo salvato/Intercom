@@ -65,7 +65,7 @@ typedef enum {
     connectionTimedOut,
     suspendCmd,
     suspendAck,
-    checkBaseRequestCmd,
+    baseRequestCmd,
     wantConnectAck,
     openGateCmd,
     openGateAck,
@@ -248,7 +248,7 @@ initSystem() {
     rf24ClearInterrupts();// Avoid false interrupts from Radio
     rf24MaskIRQ(false, false, false);
     return true;
-}
+} // bool initSystem()
 
 
 void
@@ -270,7 +270,7 @@ connectBase() {
         while(bBaseSleeping) {
             if(HAL_GetTick()-t0 > QUERY_INTERVAL) {
                 t0 = HAL_GetTick();
-                txBuffer[0] = checkBaseRequestCmd;
+                txBuffer[0] = baseRequestCmd;
                 BSP_LED_On(LED_BLUE);
                 rf24Enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
                 rf24StartWrite();
@@ -364,7 +364,7 @@ connectRemote() {
         rf24Read(rxBuffer, MAX_PAYLOAD_SIZE);
         BSP_LED_Off(LED_ORANGE);
 
-        if(rxBuffer[0] == checkBaseRequestCmd) {
+        if(rxBuffer[0] == baseRequestCmd) {
             if(bSendOpenGate) {
                 bSendOpenGate = false;
                 txBuffer[0] = openGateAck;
@@ -390,11 +390,12 @@ connectRemote() {
                 HAL_Delay(QUERY_INTERVAL+1); // Give time to the Base of receiving
                                              // the Ack and to convert into PRX mode
             }
-        } // if(rxBuffer[0] == checkBaseRequestCmd)
+        } // if(rxBuffer[0] == baseRequestCmd)
 
         if(rxBuffer[0] == connectRequest) { // Connection Request received...
             bConnectionRequested = true;
             startAlarm();
+            // bConnectionAccepted is set true in the Push Button Interrupt Routine
             while(!bConnectionAccepted && !bConnectionTimedOut) {
                 if(!updateAlarm()) {
                     bConnectionTimedOut = true;
@@ -423,8 +424,8 @@ connectRemote() {
                             rf24WriteAckPayload(1, txBuffer, MAX_PAYLOAD_SIZE);
                             BSP_LED_Off(LED_BLUE);
                             bRemoteConnected = true;
-                            HAL_Delay(250); // Give time to send the Ack and to
-                                            // convert the Base into PRX mode
+                            HAL_Delay(250); // Give time to transmit the Ack message
+                                            // and to allow the Base to enter PRX mode
                         }
                     }
                     if(HAL_GetTick() < startTimeout) // counter overflow
@@ -439,7 +440,7 @@ connectRemote() {
 
     // Connection with the Base established...
     BSP_LED_Off(LED_GREEN);
-}
+} // void connectRemote()
 
 
 void
@@ -454,19 +455,19 @@ processBase() {
     rf24Flush_tx();
 
     adcInit();
-    adcTIM2Init();
     // Enables ADC DMA requests and enables ADC peripheral
     HAL_ADC_Start_DMA(&hAdc, (uint32_t*)adcDataIn, 2*MAX_PAYLOAD_SIZE);
     chunk2Write = 0;
+    // Attention: BSP_AUDIO_OUT_Init() takes more than 20ms !
     BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
     BSP_AUDIO_OUT_Play(Audio_Out_Buffer, 2*MAX_PAYLOAD_SIZE);
     // Enable ADC periodic sampling
     HAL_TIM_Base_Start(&Tim2Handle);
 
     // Set the initial status....
-    bSuspend = false;
-    bGateOpening = false;
-    bCarGateOpening = false;
+    bSuspend            = false;
+    bGateOpening        = false;
+    bCarGateOpening     = false;
     bRadioDataAvailable = false;
 
     uint32_t startTimeout = HAL_GetTick();
@@ -511,8 +512,8 @@ processBase() {
     // Connection terminated...
     HAL_TIM_Base_Stop(&Tim2Handle);    // Stop ADC sampling...
     BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio and power down the Codec
-    HAL_Delay(300);
-}
+    HAL_Delay(300); // Give Remote time to switch from PTX to PRX
+} // void processBase()
 
 
 void
@@ -524,10 +525,13 @@ processRemote() {
     rf24Flush_tx();
     rf24Flush_rx();
 
+    // Initialize the internal Microphone
     BSP_AUDIO_IN_Init(DEFAULT_AUDIO_IN_FREQ, DEFAULT_AUDIO_IN_BIT_RESOLUTION, DEFAULT_AUDIO_IN_CHANNEL_NBR);
+    // BSP_AUDIO_OUT_Init() takes more than 20ms !
     BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, DEFAULT_AUDIO_IN_FREQ);
     chunk2Write = 0;
     BSP_AUDIO_OUT_Play(Audio_Out_Buffer, 2*MAX_PAYLOAD_SIZE);
+    // Start taking audio data from the internal microphone
     BSP_AUDIO_IN_Record(pdmDataIn, INTERNAL_BUFF_SIZE);
 
     // Set the initial status...
@@ -588,7 +592,7 @@ processRemote() {
     BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio and switch off the codec
     ledsOff();
     HAL_Delay(150);
-}
+} // void processRemote()
 
 
 void
@@ -727,6 +731,7 @@ startAlarm() {
     // Read the wav file header
     f_read (&File2Read, &waveformat, sizeof(waveformat), &bytesread);
     WaveDataLength = waveformat.FileSize;
+    // BSP_AUDIO_OUT_Init() takes more than 20ms !
     if(BSP_AUDIO_OUT_Init(OUTPUT_DEVICE_AUTO, Volume, waveformat.SampleRate) != AUDIO_OK) {
         Error_Handler();
     }
@@ -1052,6 +1057,7 @@ adcInit() {
     if(HAL_ADC_ConfigChannel(&hAdc, &sConfig) != HAL_OK) {
         Error_Handler();
     }
+    adcTIM2Init();
 }
 
 
