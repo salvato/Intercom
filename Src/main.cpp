@@ -49,14 +49,6 @@
 
 
 //===============================================================
-// State Machine for the USBH_USR_ApplicationState
-//===============================================================
-#define USBH_USR_FS_INIT    ((uint8_t)0x00)
-#define USBH_USR_AUDIO      ((uint8_t)0x01)
-//===============================================================
-
-
-//===============================================================
 // Commands
 //===============================================================
 typedef enum {
@@ -156,7 +148,6 @@ FIL File2Read;
 DIR Directory;
 FATFS DiskFatFs;          // File system object for disk logical drive
 char DiskPath[4];         // Logical drive path
-MSC_ApplicationTypeDef AppliState = APPLICATION_IDLE;
 
 
 uint32_t           WaveDataLength;
@@ -591,7 +582,7 @@ processRemote() {
     BSP_AUDIO_IN_Stop();
     BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio and switch off the codec
     ledsOff();
-    HAL_Delay(150);
+    HAL_Delay(150);// Give Base time to switch from PRX to PTX
 } // void processRemote()
 
 
@@ -854,8 +845,6 @@ relayPulse(uint32_t relayChannel, uint16_t msPulse) {
 
 bool
 prepareFileSystem() {
-    AppliState = APPLICATION_IDLE;
-
     if(FATFS_LinkDriver(&SD_Driver, DiskPath) != 0)
         return false;
     // Initializes (mount) the File System
@@ -864,7 +853,6 @@ prepareFileSystem() {
     if(f_opendir(&Directory, path) != FR_OK)
         return false;
 
-    AppliState = APPLICATION_START;
     return true;
 } // bool prepareFileSystem()
 
@@ -875,7 +863,6 @@ closeFileSystem() {
     f_mount(NULL, (TCHAR const*)"", 0);
     FATFS_UnLinkDriverEx(DiskPath, 0);
     deinit_SD_IO();
-    AppliState = APPLICATION_IDLE;
     return true;
 } // bool closeFileSystem()
 

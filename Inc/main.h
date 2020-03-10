@@ -31,14 +31,6 @@
 
 
 typedef enum {
-    APPLICATION_IDLE = 0,
-    APPLICATION_START,
-    APPLICATION_RUNNING,
-
-} MSC_ApplicationTypeDef;
-
-
-typedef enum {
     BUFFER_OFFSET_NONE = 0,
     BUFFER_OFFSET_HALF,
     BUFFER_OFFSET_FULL,
