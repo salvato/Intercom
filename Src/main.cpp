@@ -159,7 +159,7 @@ WAVE_FormatTypeDef waveformat;
 __IO bool txOk;
 __IO bool txFailed;
 __IO bool rxDataReady;
-__IO bool bRadioIrq;
+__IO bool bRadioReady;
 __IO bool bReady2Send;
 __IO bool bReady2Play;
 __IO bool bBaseSleeping;
@@ -531,13 +531,13 @@ processRemote() {
     bSendOpenGate     = false;
     bSendOpenCarGate  = false;
     bReady2Send       = false;
-    bRadioIrq         = true; // To force sending as soon as we have data
+    bRadioReady       = true; // To force sending as soon as we have data
     bool bTimeoutElapsed;
     uint32_t startTimeout = HAL_GetTick();
     do {
-        if(bReady2Send && bRadioIrq) { // We will send data only when available and
+        if(bReady2Send && bRadioReady) { // We will send data only when available and
             bReady2Send = false;       // the previous data were sent or lost !
-            bRadioIrq = false;
+            bRadioReady = false;
             BSP_LED_On(LED_BLUE);
             rf24Enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
             rf24StartWrite();     // buffer prepared by the Microphone
@@ -1107,7 +1107,7 @@ EXTI15_10_IRQHandler(void) { // We received a radio interrupt...
         BSP_LED_On(LED_RED);
         rf24Flush_tx(); // Remove messages from the TX queue
     }
-    bRadioIrq = true;
+    bRadioReady = true;
 }
 
 
