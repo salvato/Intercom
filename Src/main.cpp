@@ -255,7 +255,6 @@ connectBase() {
     bRadioDataAvailable = false;
     do {
         bBaseConnected = false;
-
         bBaseSleeping  = true; // Set to true in the Push Button Interrupt Routine
         t0 = HAL_GetTick()-QUERY_INTERVAL-1;
         while(bBaseSleeping) {
@@ -313,16 +312,16 @@ connectBase() {
             bTimeoutElapsed = (HAL_GetTick()-startConnectTime) > MAX_CONNECTION_TIME;
         } // while(!bBaseConnected && !bTimeoutElapsed)
 
-        if(!bBaseConnected) {
-            // Connection timed out...
-            // Should we set the NOACK to avoid loosing the ACK message ???
+        if(!bBaseConnected) { // Connection timed out...
+            rf24SetAutoAck(false); // To avoid loosing the ACK message
             txBuffer[0] = connectionTimedOut;
             BSP_LED_On(LED_BLUE);
             rf24Enqueue_payload(txBuffer, MAX_PAYLOAD_SIZE);
             rf24StartWrite();
             BSP_LED_Off(LED_BLUE);
-            HAL_Delay(10);
-        }
+            HAL_Delay(1);
+            rf24SetAutoAck(true);
+        } // if(!bBaseConnected)
 
     } while(!bBaseConnected);
 
@@ -503,6 +502,8 @@ processBase() {
     // Connection terminated...
     HAL_TIM_Base_Stop(&Tim2Handle);    // Stop ADC sampling...
     BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio and power down the Codec
+    if(bTimeoutElapsed)
+        HAL_NVIC_SystemReset();
     HAL_Delay(300); // Give Remote time to switch from PTX to PRX
 } // void processBase()
 
@@ -579,6 +580,7 @@ processRemote() {
     } while(!bBaseDisconnected && !bTimeoutElapsed);
 
     // Connection terminated...
+    bBaseDisconnected = true;
     BSP_AUDIO_IN_Stop();
     BSP_AUDIO_OUT_Stop(CODEC_PDWN_HW); // Stop reproducing audio and switch off the codec
     ledsOff();
