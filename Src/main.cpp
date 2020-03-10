@@ -135,7 +135,7 @@ uint16_t* pcmDataOut       = NULL;
 
 
 
-uint8_t       Volume       = 70; //% of Max
+uint8_t       Volume       = 90; //% of Max
 uint8_t       chunk2Write  = 0;
 const uint8_t radioChannel = 2;
 
